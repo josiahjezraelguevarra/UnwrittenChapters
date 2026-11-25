@@ -1,4 +1,5 @@
 import type { GalleryFolder, MediaItem } from '../shared/types';
+import { SUPPORT_EMAIL } from '../shared/contact';
 
 const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3/files';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
@@ -84,7 +85,7 @@ function mapDriveApiFailure(status: number, bodyMessage?: string): DriveError {
   if (status === 404 || status === 403) {
     if (bodyMessage && /rate|quota|limit/i.test(bodyMessage)) {
       return new DriveError(
-        'Google Drive API rate limit reached. Please wait a moment and try again.',
+        `Google Drive API quota or rate limit reached. Please wait a moment and try again, or contact ${SUPPORT_EMAIL} if this persists.`,
         429,
         'RATE_LIMITED'
       );
@@ -97,13 +98,14 @@ function mapDriveApiFailure(status: number, bodyMessage?: string): DriveError {
   }
   if (status === 429) {
     return new DriveError(
-      'Google Drive API rate limit reached. Please try again shortly.',
+      `Google Drive API rate limit reached. Please try again shortly, or contact ${SUPPORT_EMAIL} if the issue continues.`,
       429,
       'RATE_LIMITED'
     );
   }
   return new DriveError(
-    bodyMessage || 'Failed to read folder from Google Drive.',
+    bodyMessage ||
+      `Failed to read folder from Google Drive. If this persists, contact ${SUPPORT_EMAIL}.`,
     502,
     'DRIVE_API_ERROR'
   );
@@ -151,7 +153,7 @@ export async function fetchDriveFolderTree(
 ): Promise<DriveSyncResult> {
   if (!apiKey) {
     throw new DriveError(
-      'Server Google Drive API key is not configured.',
+      `Server Google Drive API key is not configured. Contact ${SUPPORT_EMAIL} for assistance.`,
       500,
       'MISSING_API_KEY'
     );
@@ -214,6 +216,7 @@ export async function fetchDriveFolderTree(
       for (const file of files) {
         if (file.mimeType === FOLDER_MIME) {
           if (
+            VALID_ID_REGEX.test(file.id) &&
             current.depth < MAX_DEPTH &&
             folders.length < MAX_FOLDERS &&
             !visited.has(file.id)
@@ -234,7 +237,9 @@ export async function fetchDriveFolderTree(
           continue;
         }
 
-        const isImage = file.mimeType.startsWith('image/');
+        // Exclude SVG images to prevent active script execution if opened inline
+        const isImage =
+          file.mimeType.startsWith('image/') && !/svg|xml/i.test(file.mimeType);
         const isVideo = file.mimeType.startsWith('video/');
         if (!isImage && !isVideo) continue;
 

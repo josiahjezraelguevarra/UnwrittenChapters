@@ -148,13 +148,19 @@ async function importHmacKey(secret: string): Promise<CryptoKey> {
   );
 }
 
+export async function getPasswordVersion(passwordHash: string | null): Promise<string> {
+  if (!passwordHash) return '';
+  return (await sha256Hex(passwordHash)).slice(0, 12);
+}
+
 export async function signUnlockToken(
   slug: string,
   secret: string,
-  ttlSeconds = 60 * 60 * 24 * 7
+  ttlSeconds = 60 * 60 * 24 * 7,
+  passwordVersion = ''
 ): Promise<string> {
   const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
-  const payload = `${slug}.${exp}`;
+  const payload = `${slug}.${exp}.${passwordVersion}`;
   const key = await importHmacKey(secret);
   const sig = await crypto.subtle.sign('HMAC', key, textEncoder.encode(payload));
   return `${exp}.${toBase64Url(new Uint8Array(sig))}`;
@@ -163,7 +169,8 @@ export async function signUnlockToken(
 export async function verifyUnlockToken(
   token: string | undefined,
   slug: string,
-  secret: string
+  secret: string,
+  passwordVersion = ''
 ): Promise<boolean> {
   if (!token) return false;
   const parts = token.split('.');
@@ -175,7 +182,7 @@ export async function verifyUnlockToken(
   const sigBytes = fromBase64Url(sigStr);
   if (!sigBytes) return false;
 
-  const payload = `${slug}.${exp}`;
+  const payload = `${slug}.${exp}.${passwordVersion}`;
   const key = await importHmacKey(secret);
   return crypto.subtle.verify('HMAC', key, sigBytes, textEncoder.encode(payload));
 }

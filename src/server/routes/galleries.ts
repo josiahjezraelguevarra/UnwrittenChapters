@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
 import type {
   GalleryFolder,
@@ -9,6 +9,7 @@ import type {
 } from '../../shared/types';
 import {
   generateSlug,
+  getPasswordVersion,
   hashPassword,
   randomToken,
   sanitizeCustomSlug,
@@ -19,6 +20,13 @@ import {
   verifyTurnstile,
   verifyUnlockToken
 } from '../crypto';
+import {
+  sanitizeHexColor,
+  validateCardRadius,
+  validateFontPreset,
+  validateGridGap
+} from '../../shared/customization';
+import { SUPPORT_EMAIL } from '../../shared/contact';
 import { DriveError, extractDriveFolderId, fetchDriveFolderTree } from '../drive';
 import {
   checkRateLimit,
@@ -31,11 +39,32 @@ import type { Env, GalleryRow } from '../types';
 export const galleriesRouter = new Hono<{ Bindings: Env }>();
 
 export function getSigningSecret(env: Env): string {
-  return env.COOKIE_SIGNING_SECRET || env.GOOGLE_DRIVE_API_KEY || 'local-dev-signing-secret';
+  const secret = env.COOKIE_SIGNING_SECRET?.trim();
+  if (!secret || secret.length < 32) {
+    throw new Error('Server COOKIE_SIGNING_SECRET must be configured (32+ characters).');
+  }
+  return secret;
 }
 
 export function unlockCookieName(slug: string): string {
   return `uc_unlock_${slug}`;
+}
+
+async function setUnlockCookieForSlug(
+  c: Context<{ Bindings: Env }>,
+  slug: string,
+  passwordHash: string | null
+): Promise<void> {
+  const pwVersion = await getPasswordVersion(passwordHash);
+  const token = await signUnlockToken(slug, getSigningSecret(c.env), 60 * 60 * 24 * 7, pwVersion);
+  const isHttps = c.req.url.startsWith('https://');
+  setCookie(c, unlockCookieName(slug), token, {
+    httpOnly: true,
+    sameSite: 'Lax',
+    secure: isHttps,
+    path: '/',
+    maxAge: 60 * 60 * 24 * 7
+  });
 }
 
 function sanitizeHttpUrl(raw: unknown): string {
@@ -79,6 +108,10 @@ function toPublicConfig(row: GalleryRow): PublicGalleryConfig {
     coverFileId: row.cover_file_id,
     layout: row.layout,
     theme: row.theme,
+    fontPreset: validateFontPreset(row.font_preset),
+    accentColor: sanitizeHexColor(row.accent_color),
+    gridGap: validateGridGap(row.grid_gap),
+    cardRadius: validateCardRadius(row.card_radius),
     brandName: row.brand_name,
     brandUrl: row.brand_url,
     allowDownload: row.allow_download === 1,
@@ -93,7 +126,8 @@ function toPublicConfig(row: GalleryRow): PublicGalleryConfig {
 }
 
 function getClientIp(c: { req: { header: (name: string) => string | undefined } }): string {
-  return c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || 'unknown';
+  // Prefer Cloudflare's verified edge IP header; avoid trusting spoofable X-Forwarded-For
+  return c.req.header('cf-connecting-ip')?.trim() || 'unknown';
 }
 
 function runWaitUntil(
@@ -152,7 +186,10 @@ galleriesRouter.post('/galleries', async (c) => {
   const allowed = await checkRateLimit(c.env.CACHE, `rl:create:${ip}`, 20, 3600);
   if (!allowed) {
     return c.json(
-      { error: 'Rate limit reached for gallery creation. Please try again later.', code: 'RATE_LIMITED' },
+      {
+        error: `Rate limit reached for gallery creation. Please try again later, or contact ${SUPPORT_EMAIL} if you need help.`,
+        code: 'RATE_LIMITED'
+      },
       429
     );
   }
@@ -228,6 +265,10 @@ galleriesRouter.post('/galleries', async (c) => {
   const brandUrl = sanitizeHttpUrl(body.brandUrl);
   const layout = validateLayout(body.layout);
   const theme = validateTheme(body.theme);
+  const fontPreset = validateFontPreset(body.fontPreset);
+  const accentColor = sanitizeHexColor(body.accentColor);
+  const gridGap = validateGridGap(body.gridGap);
+  const cardRadius = validateCardRadius(body.cardRadius);
   const allowDownload = body.allowDownload === false ? 0 : 1;
   const allowLikes = body.allowLikes === false ? 0 : 1;
   const expiresAt = computeExpiryTimestamp(body.expiresInDays);
@@ -243,6 +284,10 @@ galleriesRouter.post('/galleries', async (c) => {
     cover_file_id: coverFileId,
     layout,
     theme,
+    font_preset: fontPreset,
+    accent_color: accentColor,
+    grid_gap: gridGap,
+    card_radius: cardRadius,
     brand_name: brandName,
     brand_url: brandUrl,
     password_hash: passwordHash,
@@ -262,9 +307,10 @@ galleriesRouter.post('/galleries', async (c) => {
   await c.env.DB.prepare(
     `INSERT INTO galleries (
       id, slug, drive_folder_id, title, description, cover_file_id, layout, theme,
+      font_preset, accent_color, grid_gap, card_radius,
       brand_name, brand_url, password_hash, admin_token_hash, allow_download, allow_likes,
       expires_at, status, items_json, folders_json, item_count, view_count, synced_at, created_at
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)`
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)`
   )
     .bind(
       row.id,
@@ -275,6 +321,10 @@ galleriesRouter.post('/galleries', async (c) => {
       row.cover_file_id,
       row.layout,
       row.theme,
+      row.font_preset,
+      row.accent_color,
+      row.grid_gap,
+      row.card_radius,
       row.brand_name,
       row.brand_url,
       row.password_hash,
@@ -324,7 +374,8 @@ galleriesRouter.get('/galleries/:slug', async (c) => {
 
   if (row.password_hash) {
     const token = getCookie(c, unlockCookieName(slug));
-    const valid = await verifyUnlockToken(token, slug, getSigningSecret(c.env));
+    const pwVersion = await getPasswordVersion(row.password_hash);
+    const valid = await verifyUnlockToken(token, slug, getSigningSecret(c.env), pwVersion);
     if (!valid) {
       return c.json({
         locked: true,
@@ -409,21 +460,19 @@ galleriesRouter.post('/galleries/:slug/unlock', async (c) => {
     return c.json({ error: 'Incorrect gallery password.', code: 'INVALID_PASSWORD' }, 401);
   }
 
-  const token = await signUnlockToken(slug, getSigningSecret(c.env));
-  const isHttps = c.req.url.startsWith('https://');
-  setCookie(c, unlockCookieName(slug), token, {
-    httpOnly: true,
-    sameSite: 'Lax',
-    secure: isHttps,
-    path: '/',
-    maxAge: 60 * 60 * 24 * 7
-  });
+  await setUnlockCookieForSlug(c, slug, row.password_hash);
 
   return c.json({ unlocked: true });
 });
 
 galleriesRouter.post('/galleries/:slug/likes', async (c) => {
   const slug = c.req.param('slug');
+  const ip = getClientIp(c);
+  const allowed = await checkRateLimit(c.env.CACHE, `rl:like:${slug}:${ip}`, 120, 60);
+  if (!allowed) {
+    return c.json({ error: 'Too many favorite actions. Please slow down.', code: 'RATE_LIMITED' }, 429);
+  }
+
   const row = await getGalleryBySlug(c.env.DB, slug);
 
   if (!row) return c.json({ error: 'Gallery not found.' }, 404);
@@ -433,7 +482,8 @@ galleriesRouter.post('/galleries/:slug/likes', async (c) => {
 
   if (row.password_hash) {
     const token = getCookie(c, unlockCookieName(slug));
-    const valid = await verifyUnlockToken(token, slug, getSigningSecret(c.env));
+    const pwVersion = await getPasswordVersion(row.password_hash);
+    const valid = await verifyUnlockToken(token, slug, getSigningSecret(c.env), pwVersion);
     if (!valid) return c.json({ error: 'Gallery is locked.' }, 401);
   }
 
@@ -509,6 +559,10 @@ galleriesRouter.get('/galleries/:slug/manage', async (c) => {
     likeCounts[r.drive_file_id] = Number(r.cnt);
   }
 
+  if (row.password_hash) {
+    await setUnlockCookieForSlug(c, row.slug, row.password_hash);
+  }
+
   return c.json({
     gallery: toPublicConfig(row),
     driveFolderId: row.drive_folder_id,
@@ -547,6 +601,20 @@ galleriesRouter.patch('/galleries/:slug/manage', async (c) => {
     body.brandUrl !== undefined ? sanitizeHttpUrl(body.brandUrl) : row.brand_url;
   const layout = body.layout !== undefined ? validateLayout(body.layout) : row.layout;
   const theme = body.theme !== undefined ? validateTheme(body.theme) : row.theme;
+  const fontPreset =
+    body.fontPreset !== undefined
+      ? validateFontPreset(body.fontPreset)
+      : validateFontPreset(row.font_preset);
+  const accentColor =
+    body.accentColor !== undefined
+      ? sanitizeHexColor(body.accentColor)
+      : sanitizeHexColor(row.accent_color);
+  const gridGap =
+    body.gridGap !== undefined ? validateGridGap(body.gridGap) : validateGridGap(row.grid_gap);
+  const cardRadius =
+    body.cardRadius !== undefined
+      ? validateCardRadius(body.cardRadius)
+      : validateCardRadius(row.card_radius);
   const allowDownload =
     typeof body.allowDownload === 'boolean' ? (body.allowDownload ? 1 : 0) : row.allow_download;
   const allowLikes =
@@ -572,9 +640,10 @@ galleriesRouter.patch('/galleries/:slug/manage', async (c) => {
   await c.env.DB.prepare(
     `UPDATE galleries SET
       title = ?1, description = ?2, brand_name = ?3, brand_url = ?4,
-      layout = ?5, theme = ?6, cover_file_id = ?7, allow_download = ?8,
-      allow_likes = ?9, password_hash = ?10, expires_at = ?11
-     WHERE id = ?12`
+      layout = ?5, theme = ?6, font_preset = ?7, accent_color = ?8,
+      grid_gap = ?9, card_radius = ?10, cover_file_id = ?11, allow_download = ?12,
+      allow_likes = ?13, password_hash = ?14, expires_at = ?15
+     WHERE id = ?16`
   )
     .bind(
       title,
@@ -583,6 +652,10 @@ galleriesRouter.patch('/galleries/:slug/manage', async (c) => {
       brandUrl,
       layout,
       theme,
+      fontPreset,
+      accentColor,
+      gridGap,
+      cardRadius,
       coverFileId,
       allowDownload,
       allowLikes,
@@ -595,6 +668,9 @@ galleriesRouter.patch('/galleries/:slug/manage', async (c) => {
   await invalidateGalleryCache(c.env.CACHE, row.slug);
   const updated = await getGalleryBySlug(c.env.DB, row.slug);
   if (updated) await saveManifestCache(c.env.CACHE, updated);
+  if (passwordHash) {
+    await setUnlockCookieForSlug(c, row.slug, passwordHash);
+  }
 
   return c.json({
     gallery: updated ? toPublicConfig(updated) : toPublicConfig(row)
@@ -602,12 +678,22 @@ galleriesRouter.patch('/galleries/:slug/manage', async (c) => {
 });
 
 galleriesRouter.post('/galleries/:slug/sync', async (c) => {
+  const slug = c.req.param('slug');
   const row = await requireGalleryAdmin(
     c.env.DB,
-    c.req.param('slug'),
+    slug,
     c.req.header('authorization')
   );
   if (!row) return c.json({ error: 'Invalid or missing manage token.' }, 401);
+
+  const ip = getClientIp(c);
+  const allowed = await checkRateLimit(c.env.CACHE, `rl:sync:${slug}:${ip}`, 10, 300);
+  if (!allowed) {
+    return c.json(
+      { error: 'Too many sync requests. Please wait a few minutes.', code: 'RATE_LIMITED' },
+      429
+    );
+  }
 
   const sync = await fetchDriveFolderTree(row.drive_folder_id, c.env.GOOGLE_DRIVE_API_KEY);
   const now = Date.now();

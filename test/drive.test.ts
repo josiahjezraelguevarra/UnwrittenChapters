@@ -77,6 +77,11 @@ describe('fetchDriveFolderTree', () => {
                 id: 'docIgnore001',
                 name: 'notes.pdf',
                 mimeType: 'application/pdf'
+              },
+              {
+                id: 'svgIgnore001',
+                name: 'xss.svg',
+                mimeType: 'image/svg+xml'
               }
             ]
           }),
@@ -125,6 +130,16 @@ describe('fetchDriveFolderTree', () => {
     const mockFetch: typeof fetch = async () => new Response('{}', { status: 404 });
     await expect(fetchDriveFolderTree('privateFolder123', 'test-key', mockFetch)).rejects.toThrow(
       DriveError
+    );
+  });
+
+  it('includes support contact email when Drive API rate limit or quota is exhausted', async () => {
+    const mockFetch: typeof fetch = async () =>
+      new Response(JSON.stringify({ error: { message: 'User rate limit exceeded' } }), {
+        status: 403
+      });
+    await expect(fetchDriveFolderTree('folder123456', 'test-key', mockFetch)).rejects.toThrow(
+      'josiahjezraelguevarra.bsit@gmail.com'
     );
   });
 });

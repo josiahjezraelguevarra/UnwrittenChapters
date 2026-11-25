@@ -55,7 +55,12 @@ mediaRouter.get('/media/:slug/:fileId', async (c) => {
 
   if (manifest.hasPassword) {
     const token = getCookie(c, unlockCookieName(slug));
-    const ok = await verifyUnlockToken(token, slug, getSigningSecret(c.env));
+    const ok = await verifyUnlockToken(
+      token,
+      slug,
+      getSigningSecret(c.env),
+      manifest.passwordVersion || ''
+    );
     if (!ok) {
       return c.json({ error: 'Password unlock required.' }, 401);
     }
@@ -90,10 +95,16 @@ mediaRouter.get('/media/:slug/:fileId', async (c) => {
       );
       const upstream = await fetch(sizedUrl);
       if (upstream.ok && upstream.body) {
+        const rawThumbType = upstream.headers.get('Content-Type') || 'image/jpeg';
+        const safeThumbType = /^image\/(jpeg|jpg|png|webp|gif|avif)$/i.test(rawThumbType)
+          ? rawThumbType
+          : 'image/jpeg';
+
         const headers = new Headers();
-        headers.set('Content-Type', upstream.headers.get('Content-Type') || 'image/jpeg');
+        headers.set('Content-Type', safeThumbType);
         headers.set('Cache-Control', cacheControl);
         headers.set('X-Content-Type-Options', 'nosniff');
+        headers.set('Content-Security-Policy', "default-src 'none'; sandbox");
 
         const response = new Response(upstream.body, {
           status: 200,
@@ -125,11 +136,14 @@ mediaRouter.get('/media/:slug/:fileId', async (c) => {
     );
   }
 
+  const rawStreamType =
+    upstream.headers.get('Content-Type') || fileMeta.mimeType || 'application/octet-stream';
+  const isActiveType = /svg|html|xml|javascript|ecmascript/i.test(rawStreamType);
+  const safeStreamType = isActiveType ? 'application/octet-stream' : rawStreamType;
+  const forceDownload = wantDownload || isActiveType;
+
   const headers = new Headers();
-  headers.set(
-    'Content-Type',
-    upstream.headers.get('Content-Type') || fileMeta.mimeType || 'application/octet-stream'
-  );
+  headers.set('Content-Type', safeStreamType);
   const contentLength = upstream.headers.get('Content-Length');
   if (contentLength) headers.set('Content-Length', contentLength);
   const contentRange = upstream.headers.get('Content-Range');
@@ -137,9 +151,10 @@ mediaRouter.get('/media/:slug/:fileId', async (c) => {
   headers.set('Accept-Ranges', upstream.headers.get('Accept-Ranges') || 'bytes');
   headers.set('Cache-Control', cacheControl);
   headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('Content-Security-Policy', "default-src 'none'; sandbox");
   headers.set(
     'Content-Disposition',
-    `${wantDownload ? 'attachment' : 'inline'}; filename="${safeFilename(fileMeta.name)}"`
+    `${forceDownload ? 'attachment' : 'inline'}; filename="${safeFilename(fileMeta.name)}"`
   );
 
   return new Response(upstream.body, {

@@ -1,6 +1,9 @@
 import type {
   AppPublicConfig,
+  GalleryCardRadius,
   GalleryFolder,
+  GalleryFontPreset,
+  GalleryGridGap,
   GalleryLayout,
   GalleryTheme,
   GalleryViewResponse,
@@ -109,6 +112,10 @@ export interface CreateGalleryPayload {
   brandUrl?: string;
   layout?: GalleryLayout;
   theme?: GalleryTheme;
+  fontPreset?: GalleryFontPreset;
+  accentColor?: string;
+  gridGap?: GalleryGridGap;
+  cardRadius?: GalleryCardRadius;
   password?: string;
   expiresInDays?: number | null;
   allowDownload?: boolean;
@@ -233,6 +240,18 @@ export async function reportGallery(
     body: JSON.stringify({ reason, details, turnstileToken })
   });
   await parseJson<{ reported: boolean }>(res);
+}
+
+export interface BibleVerseResponse {
+  reference: string;
+  text: string;
+  translation: string;
+  source?: 'api' | 'fallback';
+}
+
+export async function fetchRandomBibleVerse(signal?: AbortSignal): Promise<BibleVerseResponse> {
+  const res = await fetch('/api/bible/random', { signal, cache: 'no-store' });
+  return parseJson<BibleVerseResponse>(res);
 }
 
 export function mediaThumbUrl(slug: string, fileId: string, width = 800): string {

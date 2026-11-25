@@ -13,10 +13,33 @@ const DEFAULT_CONFIG: AppPublicConfig = {
   turnstileRequired: false
 };
 
+const HOME_THEME_KEY = 'uc_home_theme';
+
+function loadInitialHomeTheme(): 'light' | 'dark' {
+  try {
+    return localStorage.getItem(HOME_THEME_KEY) === 'dark' ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
+
 export function App() {
   const [pathname, setPathname] = useState(() => window.location.pathname);
   const [config, setConfig] = useState<AppPublicConfig>(DEFAULT_CONFIG);
   const [donateOpen, setDonateOpen] = useState(false);
+  const [homeTheme, setHomeTheme] = useState<'light' | 'dark'>(loadInitialHomeTheme);
+
+  const toggleHomeTheme = useCallback(() => {
+    setHomeTheme((prev) => {
+      const next = prev === 'dark' ? 'light' : 'dark';
+      try {
+        localStorage.setItem(HOME_THEME_KEY, next);
+      } catch {
+        // Ignore storage errors
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     fetchAppConfig()
@@ -56,6 +79,8 @@ export function App() {
       ) : (
         <HomePage
           config={config}
+          homeTheme={homeTheme}
+          onToggleHomeTheme={toggleHomeTheme}
           onOpenDonate={() => setDonateOpen(true)}
           onNavigate={navigate}
         />
@@ -66,6 +91,7 @@ export function App() {
         onClose={() => setDonateOpen(false)}
         appName={config.appName}
         donateUrl={config.donateUrl}
+        dark={!manageMatch && !galleryMatch && homeTheme === 'dark'}
       />
     </>
   );

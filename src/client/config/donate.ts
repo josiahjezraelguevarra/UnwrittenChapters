@@ -11,16 +11,22 @@ export interface DonateQrOption {
  */
 export const DONATE_QR_OPTIONS: DonateQrOption[] = [
   {
-    id: 'gcash',
-    label: 'GCash',
-    imagePath: '/qr/gcash.png',
-    hint: 'Scan with GCash app'
+    id: 'gotyme',
+    label: 'GoTyme',
+    imagePath: '/qr/gotyme.png',
+    hint: 'Scan with GoTyme Bank app'
   },
   {
     id: 'maya',
     label: 'Maya',
     imagePath: '/qr/maya.png',
     hint: 'Scan with Maya app'
+  },
+  {
+    id: 'gcash',
+    label: 'GCash',
+    imagePath: '/qr/gcash.png',
+    hint: 'Scan with GCash app'
   },
   {
     id: 'kofi',

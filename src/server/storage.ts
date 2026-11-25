@@ -1,4 +1,5 @@
 import type { MediaItem } from '../shared/types';
+import { getPasswordVersion } from './crypto';
 import type { CachedMediaManifest, GalleryRow } from './types';
 
 const MANIFEST_TTL_SEC = 60 * 15; // 15 minutes
@@ -7,7 +8,7 @@ function manifestKey(slug: string): string {
   return `manifest:${slug}`;
 }
 
-export function buildManifestFromRow(row: GalleryRow): CachedMediaManifest {
+export async function buildManifestFromRow(row: GalleryRow): Promise<CachedMediaManifest> {
   const items = JSON.parse(row.items_json) as MediaItem[];
   const fileIds: CachedMediaManifest['fileIds'] = {};
   for (const item of items) {
@@ -23,6 +24,7 @@ export function buildManifestFromRow(row: GalleryRow): CachedMediaManifest {
     status: row.status,
     expiresAt: row.expires_at,
     hasPassword: Boolean(row.password_hash),
+    passwordVersion: await getPasswordVersion(row.password_hash),
     allowDownload: row.allow_download === 1,
     fileIds
   };
@@ -52,7 +54,7 @@ export async function getMediaManifest(
   const row = await getGalleryBySlug(db, slug);
   if (!row) return null;
 
-  const manifest = buildManifestFromRow(row);
+  const manifest = await buildManifestFromRow(row);
   await kv.put(manifestKey(slug), JSON.stringify(manifest), {
     expirationTtl: MANIFEST_TTL_SEC
   });
@@ -60,7 +62,7 @@ export async function getMediaManifest(
 }
 
 export async function saveManifestCache(kv: KVNamespace, row: GalleryRow): Promise<void> {
-  const manifest = buildManifestFromRow(row);
+  const manifest = await buildManifestFromRow(row);
   await kv.put(manifestKey(row.slug), JSON.stringify(manifest), {
     expirationTtl: MANIFEST_TTL_SEC
   });

@@ -92,22 +92,46 @@ function createMemoryDB() {
               cover_file_id: args[5] as string | null,
               layout: args[6] as GalleryRow['layout'],
               theme: args[7] as GalleryRow['theme'],
-              brand_name: args[8] as string,
-              brand_url: args[9] as string,
-              password_hash: args[10] as string | null,
-              admin_token_hash: args[11] as string,
-              allow_download: args[12] as number,
-              allow_likes: args[13] as number,
-              expires_at: args[14] as number | null,
-              status: args[15] as string,
-              items_json: args[16] as string,
-              folders_json: args[17] as string,
-              item_count: args[18] as number,
-              view_count: args[19] as number,
-              synced_at: args[20] as number,
-              created_at: args[21] as number
+              font_preset: args[8] as GalleryRow['font_preset'],
+              accent_color: args[9] as string,
+              grid_gap: args[10] as GalleryRow['grid_gap'],
+              card_radius: args[11] as GalleryRow['card_radius'],
+              brand_name: args[12] as string,
+              brand_url: args[13] as string,
+              password_hash: args[14] as string | null,
+              admin_token_hash: args[15] as string,
+              allow_download: args[16] as number,
+              allow_likes: args[17] as number,
+              expires_at: args[18] as number | null,
+              status: args[19] as string,
+              items_json: args[20] as string,
+              folders_json: args[21] as string,
+              item_count: args[22] as number,
+              view_count: args[23] as number,
+              synced_at: args[24] as number,
+              created_at: args[25] as number
             };
             galleries.set(row.id, row);
+          } else if (sql.startsWith('UPDATE galleries SET') && sql.includes('font_preset')) {
+            const id = args[15] as string;
+            const existing = galleries.get(id);
+            if (existing) {
+              existing.title = args[0] as string;
+              existing.description = args[1] as string;
+              existing.brand_name = args[2] as string;
+              existing.brand_url = args[3] as string;
+              existing.layout = args[4] as GalleryRow['layout'];
+              existing.theme = args[5] as GalleryRow['theme'];
+              existing.font_preset = args[6] as GalleryRow['font_preset'];
+              existing.accent_color = args[7] as string;
+              existing.grid_gap = args[8] as GalleryRow['grid_gap'];
+              existing.card_radius = args[9] as GalleryRow['card_radius'];
+              existing.cover_file_id = args[10] as string | null;
+              existing.allow_download = args[11] as number;
+              existing.allow_likes = args[12] as number;
+              existing.password_hash = args[13] as string | null;
+              existing.expires_at = args[14] as number | null;
+            }
           } else if (sql.startsWith('INSERT INTO likes')) {
             likes.add(`${args[0]}:${args[1]}:${args[2]}`);
           } else if (sql.startsWith('DELETE FROM likes')) {
@@ -179,6 +203,19 @@ describe('Gallery API & Media Proxy security', () => {
           status: 200,
           headers: { 'Content-Type': 'image/jpeg' }
         });
+      }
+      if (url.includes('bolls.life/get-random-verse/ESV')) {
+        return new Response(
+          JSON.stringify({
+            pk: 26412,
+            translation: 'ESV',
+            book: 43,
+            chapter: 3,
+            verse: 16,
+            text: 'For God so loved<br/>the world &amp; gave his only Son.'
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
       }
       return new Response('{}', { status: 404 });
     }) as unknown as typeof fetch;
@@ -271,6 +308,64 @@ describe('Gallery API & Media Proxy security', () => {
     );
     expect(validMediaRes.status).toBe(200);
     expect(validMediaRes.headers.get('cache-control')).toBe('private, no-store');
+    expect(validMediaRes.headers.get('content-security-policy')).toBe(
+      "default-src 'none'; sandbox"
+    );
+
+    // Manage endpoint grants unlock cookie for password-protected admin preview thumbnails
+    const adminToken = created.managePath.split('#')[1];
+    const manageRes = await app.request(
+      `/api/galleries/${created.slug}/manage`,
+      { headers: { Authorization: `Bearer ${adminToken}` } },
+      env
+    );
+    expect(manageRes.status).toBe(200);
+    expect(manageRes.headers.get('set-cookie')).toContain(`uc_unlock_${created.slug}=`);
+    expect(manageRes.headers.get('x-frame-options')).toBe('DENY');
+    expect(manageRes.headers.get('x-content-type-options')).toBe('nosniff');
+
+    // Rotating the password invalidates previously issued unlock cookies
+    const rotateRes = await app.request(
+      `/api/galleries/${created.slug}/manage`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ password: 'new-rotated-password' })
+      },
+      env
+    );
+    expect(rotateRes.status).toBe(200);
+
+    const staleCookieGallery = await app.request(
+      `/api/galleries/${created.slug}`,
+      { headers: { Cookie: cookiePair } },
+      env
+    );
+    const staleBody = (await staleCookieGallery.json()) as { locked: boolean };
+    expect(staleBody.locked).toBe(true);
+
+    const staleCookieMedia = await app.request(
+      `/api/media/${created.slug}/imgFile00001?variant=thumb`,
+      { headers: { Cookie: cookiePair } },
+      env
+    );
+    expect(staleCookieMedia.status).toBe(401);
+
+    // Missing COOKIE_SIGNING_SECRET fails closed instead of using a weak fallback
+    const insecureEnv = { ...env, COOKIE_SIGNING_SECRET: '' };
+    const noSecretUnlock = await app.request(
+      `/api/galleries/${created.slug}/unlock`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'new-rotated-password' })
+      },
+      insecureEnv
+    );
+    expect(noSecretUnlock.status).toBe(500);
   });
 
   it('supports toggling likes and admin deletion', async () => {
@@ -315,5 +410,118 @@ describe('Gallery API & Media Proxy security', () => {
       env
     );
     expect(goodDel.status).toBe(200);
+  });
+
+  it('persists and sanitizes visual styling & typography customization', async () => {
+    const createRes = await app.request(
+      '/api/galleries',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driveUrl: 'https://drive.google.com/drive/folders/folderABC12345',
+          fontPreset: 'serif',
+          accentColor: '#E11D48',
+          gridGap: 'airy',
+          cardRadius: 'sharp'
+        })
+      },
+      env
+    );
+    expect(createRes.status).toBe(201);
+    const created = (await createRes.json()) as {
+      slug: string;
+      managePath: string;
+      gallery: {
+        fontPreset: string;
+        accentColor: string;
+        gridGap: string;
+        cardRadius: string;
+      };
+    };
+    expect(created.gallery.fontPreset).toBe('serif');
+    expect(created.gallery.accentColor).toBe('#e11d48');
+    expect(created.gallery.gridGap).toBe('airy');
+    expect(created.gallery.cardRadius).toBe('sharp');
+
+    const adminToken = created.managePath.split('#')[1];
+    const patchRes = await app.request(
+      `/api/galleries/${created.slug}/manage`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          fontPreset: 'mono',
+          accentColor: 'not-a-color',
+          gridGap: 'compact',
+          cardRadius: 'soft'
+        })
+      },
+      env
+    );
+    expect(patchRes.status).toBe(200);
+    const patched = (await patchRes.json()) as {
+      gallery: {
+        fontPreset: string;
+        accentColor: string;
+        gridGap: string;
+        cardRadius: string;
+      };
+    };
+    expect(patched.gallery.fontPreset).toBe('mono');
+    expect(patched.gallery.accentColor).toBe('');
+    expect(patched.gallery.gridGap).toBe('compact');
+    expect(patched.gallery.cardRadius).toBe('soft');
+
+    const noGapRes = await app.request(
+      `/api/galleries/${created.slug}/manage`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ gridGap: 'none' })
+      },
+      env
+    );
+    expect(noGapRes.status).toBe(200);
+    const noGapBody = (await noGapRes.json()) as { gallery: { gridGap: string } };
+    expect(noGapBody.gallery.gridGap).toBe('none');
+  });
+
+  it('serves sanitized ESV Bible verses from public API with safe fallback', async () => {
+    const res = await app.request('/api/bible/random', undefined, env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    const body = (await res.json()) as {
+      reference: string;
+      text: string;
+      translation: string;
+      source: string;
+    };
+    expect(body).toEqual({
+      reference: 'John 3:16',
+      text: 'For God so loved the world & gave his only Son.',
+      translation: 'ESV',
+      source: 'api'
+    });
+
+    globalThis.fetch = vi.fn(async () => new Response('Unavailable', { status: 503 })) as unknown as typeof fetch;
+    const fallbackRes = await app.request('/api/bible/random', undefined, env);
+    expect(fallbackRes.status).toBe(200);
+    const fallbackBody = (await fallbackRes.json()) as {
+      reference: string;
+      text: string;
+      translation: string;
+      source: string;
+    };
+    expect(fallbackBody.translation).toBe('ESV');
+    expect(fallbackBody.source).toBe('fallback');
+    expect(fallbackBody.reference.length).toBeGreaterThan(2);
+    expect(fallbackBody.text.length).toBeGreaterThan(10);
   });
 });

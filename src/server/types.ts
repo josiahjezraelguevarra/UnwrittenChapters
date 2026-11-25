@@ -1,4 +1,10 @@
-import type { GalleryLayout, GalleryTheme } from '../shared/types';
+import type {
+  GalleryCardRadius,
+  GalleryFontPreset,
+  GalleryGridGap,
+  GalleryLayout,
+  GalleryTheme
+} from '../shared/types';
 
 export interface Env {
   DB: D1Database;
@@ -22,6 +28,10 @@ export interface GalleryRow {
   cover_file_id: string | null;
   layout: GalleryLayout;
   theme: GalleryTheme;
+  font_preset: GalleryFontPreset;
+  accent_color: string;
+  grid_gap: GalleryGridGap;
+  card_radius: GalleryCardRadius;
   brand_name: string;
   brand_url: string;
   password_hash: string | null;
@@ -44,6 +54,7 @@ export interface CachedMediaManifest {
   status: string;
   expiresAt: number | null;
   hasPassword: boolean;
+  passwordVersion: string;
   allowDownload: boolean;
   fileIds: Record<string, { name: string; mimeType: string; kind: 'image' | 'video' }>;
 }

@@ -1,3 +1,10 @@
+import type {
+  GalleryCardRadius,
+  GalleryFontPreset,
+  GalleryGridGap
+} from './customization';
+
+export type { GalleryCardRadius, GalleryFontPreset, GalleryGridGap };
 export type GalleryLayout = 'masonry' | 'grid' | 'justified';
 export type GalleryTheme = 'light' | 'dark';
 export type MediaKind = 'image' | 'video';
@@ -32,6 +39,10 @@ export interface PublicGalleryConfig {
   coverFileId: string | null;
   layout: GalleryLayout;
   theme: GalleryTheme;
+  fontPreset: GalleryFontPreset;
+  accentColor: string;
+  gridGap: GalleryGridGap;
+  cardRadius: GalleryCardRadius;
   brandName: string;
   brandUrl: string;
   allowDownload: boolean;
