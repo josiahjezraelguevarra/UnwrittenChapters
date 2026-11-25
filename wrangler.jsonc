@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "unwritten-chapters-gallery",
+  "compatibility_date": "2025-03-01",
+  "main": "./src/server/index.ts",
+  "assets": {
+    "directory": "./dist/client",
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "unwritten_chapters_db",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "00000000000000000000000000000000"
+    }
+  ],
+  "vars": {
+    "PUBLIC_APP_NAME": "UnwrittenChapters",
+    "PUBLIC_DONATE_URL": "",
+    "PUBLIC_TURNSTILE_SITE_KEY": ""
+  }
+}

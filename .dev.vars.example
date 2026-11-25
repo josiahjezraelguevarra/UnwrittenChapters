@@ -1,0 +1,7 @@
+# Copy this file to .dev.vars for local development (never commit .dev.vars)
+GOOGLE_DRIVE_API_KEY=your_google_cloud_api_key_here
+COOKIE_SIGNING_SECRET=change_this_to_a_long_random_hex_string_at_least_32_chars
+TURNSTILE_SECRET_KEY=
+ADMIN_MODERATION_KEY=change_this_to_an_operator_moderation_key
+PUBLIC_DONATE_URL=
+PUBLIC_TURNSTILE_SITE_KEY=
