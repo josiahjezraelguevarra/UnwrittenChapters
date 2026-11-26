@@ -12,14 +12,14 @@
     {
       "binding": "DB",
       "database_name": "unwritten_chapters_db",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "83254fe7-c365-4252-a7af-a9cb0e0afa09",
       "migrations_dir": "migrations"
     }
   ],
   "kv_namespaces": [
     {
       "binding": "CACHE",
-      "id": "00000000000000000000000000000000"
+      "id": "820ab261f3184e93966f95beb3f57c74"
     }
   ],
   "vars": {
