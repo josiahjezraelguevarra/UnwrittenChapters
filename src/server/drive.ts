@@ -1,9 +1,11 @@
 import type { GalleryFolder, MediaItem } from '../shared/types';
 import { SUPPORT_EMAIL } from '../shared/contact';
+import { sanitizeControlChars } from './security';
 
 const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3/files';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const VALID_ID_REGEX = /^[a-zA-Z0-9_-]{10,64}$/;
+const DRIVE_FETCH_TIMEOUT_MS = 10_000;
 
 const MAX_DEPTH = 3;
 const MAX_FOLDERS = 40;
@@ -103,9 +105,11 @@ function mapDriveApiFailure(status: number, bodyMessage?: string): DriveError {
       'RATE_LIMITED'
     );
   }
+  if (bodyMessage) {
+    console.warn('Drive API failure:', status, sanitizeControlChars(bodyMessage, 200));
+  }
   return new DriveError(
-    bodyMessage ||
-      `Failed to read folder from Google Drive. If this persists, contact ${SUPPORT_EMAIL}.`,
+    `Failed to read folder from Google Drive. If this persists, contact ${SUPPORT_EMAIL}.`,
     502,
     'DRIVE_API_ERROR'
   );
@@ -131,7 +135,9 @@ async function listSingleFolderPage(
     params.set('pageToken', pageToken);
   }
 
-  const res = await fetchFn(`${DRIVE_API_BASE}?${params.toString()}`);
+  const res = await fetchFn(`${DRIVE_API_BASE}?${params.toString()}`, {
+    signal: AbortSignal.timeout(DRIVE_FETCH_TIMEOUT_MS)
+  });
   const data = (await res.json().catch(() => ({}))) as DriveListResponse;
   if (!res.ok) {
     throw mapDriveApiFailure(res.status, data.error?.message);
@@ -164,7 +170,10 @@ export async function fetchDriveFolderTree(
     supportsAllDrives: 'true',
     key: apiKey
   });
-  const rootRes = await fetchFn(`${DRIVE_API_BASE}/${encodeURIComponent(rootFolderId)}?${rootMetaParams.toString()}`);
+  const rootRes = await fetchFn(
+    `${DRIVE_API_BASE}/${encodeURIComponent(rootFolderId)}?${rootMetaParams.toString()}`,
+    { signal: AbortSignal.timeout(DRIVE_FETCH_TIMEOUT_MS) }
+  );
   const rootData = (await rootRes.json().catch(() => ({}))) as {
     id?: string;
     name?: string;
@@ -183,11 +192,12 @@ export async function fetchDriveFolderTree(
     );
   }
 
+  const safeRootName = sanitizeControlChars(rootData.name || 'Gallery', 120) || 'Gallery';
   const items: MediaItem[] = [];
   const folders: GalleryFolder[] = [
     {
       id: rootFolderId,
-      name: rootData.name || 'Gallery',
+      name: safeRootName,
       path: '',
       parentId: null,
       itemCount: 0
@@ -222,10 +232,11 @@ export async function fetchDriveFolderTree(
             !visited.has(file.id)
           ) {
             visited.add(file.id);
-            const subPath = current.path ? `${current.path}/${file.name}` : file.name;
+            const cleanFolderName = sanitizeControlChars(file.name || 'Folder', 120) || 'Folder';
+            const subPath = current.path ? `${current.path}/${cleanFolderName}` : cleanFolderName;
             const folderEntry: GalleryFolder = {
               id: file.id,
-              name: file.name,
+              name: cleanFolderName,
               path: subPath,
               parentId: current.id,
               itemCount: 0
@@ -236,6 +247,8 @@ export async function fetchDriveFolderTree(
           }
           continue;
         }
+
+        if (!VALID_ID_REGEX.test(file.id)) continue;
 
         // Exclude SVG images to prevent active script execution if opened inline
         const isImage =
@@ -258,10 +271,11 @@ export async function fetchDriveFolderTree(
           isVideo && file.videoMediaMetadata?.durationMillis
             ? Number(file.videoMediaMetadata.durationMillis)
             : null;
+        const cleanFileName = sanitizeControlChars(file.name || 'media', 200) || 'media';
 
         items.push({
           id: file.id,
-          name: file.name,
+          name: cleanFileName,
           mimeType: file.mimeType,
           kind: isImage ? 'image' : 'video',
           sizeBytes: file.size ? Number(file.size) : 0,
@@ -286,7 +300,7 @@ export async function fetchDriveFolderTree(
   }
 
   return {
-    folderName: rootData.name || 'Untitled Gallery',
+    folderName: sanitizeControlChars(rootData.name || 'Untitled Gallery', 120) || 'Untitled Gallery',
     items,
     folders,
     truncated
@@ -303,7 +317,10 @@ export async function fetchDriveThumbnailUrl(
     supportsAllDrives: 'true',
     key: apiKey
   });
-  const res = await fetchFn(`${DRIVE_API_BASE}/${encodeURIComponent(fileId)}?${params.toString()}`);
+  const res = await fetchFn(
+    `${DRIVE_API_BASE}/${encodeURIComponent(fileId)}?${params.toString()}`,
+    { signal: AbortSignal.timeout(DRIVE_FETCH_TIMEOUT_MS) }
+  );
   if (!res.ok) return null;
   const data = (await res.json().catch(() => ({}))) as { thumbnailLink?: string };
   return data.thumbnailLink || null;

@@ -60,13 +60,13 @@ export function OpeningIntro({
       {phase === 'typing' ? (
         <div className="flex h-full flex-col justify-between px-6 py-8 sm:px-10">
           <div className="flex items-center justify-between">
-            <span className="font-mono text-xs tracking-widest uppercase opacity-55">
-              Client Galleries · Drive
+            <span className="text-[13px] font-medium opacity-60">
+              Client galleries from Google Drive
             </span>
             <button
               type="button"
               onClick={() => setPhase('done')}
-              className={`min-h-[38px] rounded-full border px-3.5 font-mono text-xs transition ${
+              className={`min-h-[38px] rounded-full border px-3.5 text-[13px] font-medium transition ${
                 dark
                   ? 'border-[#f4f1ea]/20 text-[#f4f1ea]/75 hover:border-[#f4f1ea]/45 hover:text-[#f4f1ea]'
                   : 'border-[#141311]/15 text-[#141311]/70 hover:border-[#141311]/40 hover:text-[#141311]'
@@ -78,16 +78,16 @@ export function OpeningIntro({
 
           <div className="mx-auto max-w-3xl text-center">
             <img
-              src="/logo.png"
+              src="/logo.svg"
               alt=""
               className={`mx-auto mb-4 h-14 w-14 object-contain sm:h-16 sm:w-16 ${
                 dark ? 'invert' : ''
               }`}
             />
-            <p className="font-mono text-xs tracking-[0.2em] uppercase opacity-50">
-              Edition 01 · Zero-Account Delivery
+            <p className="text-sm font-medium opacity-55">
+              Zero-account gallery delivery
             </p>
-            <p className="uc-font-serif mt-4 text-4xl font-semibold tracking-tight sm:text-6xl">
+            <p className="uc-font-serif mt-3 text-4xl font-semibold tracking-tight sm:text-6xl">
               <span>{brandText.slice(0, charCount)}</span>
               <span
                 aria-hidden="true"
@@ -110,7 +110,7 @@ export function OpeningIntro({
             </div>
           </div>
 
-          <p className="text-center font-mono text-[11px] tracking-wider uppercase opacity-45">
+          <p className="text-center text-[13px] opacity-50">
             Preparing studio workspace...
           </p>
         </div>

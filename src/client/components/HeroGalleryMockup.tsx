@@ -141,7 +141,7 @@ export function HeroGalleryMockup({ dark = false }: HeroGalleryMockupProps) {
             <Lock className="h-2.5 w-2.5 opacity-60" />
             <span>/g/unwritten-chapters</span>
           </div>
-          <span className="font-mono text-[9px] tracking-wider uppercase opacity-50">
+          <span className="text-[11px] font-medium opacity-55">
             Desktop
           </span>
         </div>
@@ -150,8 +150,8 @@ export function HeroGalleryMockup({ dark = false }: HeroGalleryMockupProps) {
         <div className={`border-b px-4 py-3.5 ${dark ? 'border-[#f4f1ea]/10' : 'border-[#141311]/10'}`}>
           <div className="flex items-center justify-between gap-2">
             <div>
-              <p className="font-mono text-[9px] tracking-[0.16em] uppercase opacity-55">
-                Drive → Gallery
+              <p className="text-[11px] opacity-60">
+                Gallery preview
               </p>
               <p className="uc-font-serif mt-0.5 text-lg font-semibold tracking-tight sm:text-xl">
                 UnwrittenChapters
@@ -214,8 +214,8 @@ export function HeroGalleryMockup({ dark = false }: HeroGalleryMockupProps) {
           />
         </div>
         <div className={`border-b px-2.5 pb-2 ${dark ? 'border-[#f4f1ea]/10' : 'border-[#141311]/10'}`}>
-          <p className="font-mono text-[7px] tracking-widest uppercase opacity-55">Mobile View</p>
-          <p className="uc-font-serif truncate text-xs font-semibold">UnwrittenChapters</p>
+          <p className="text-[10px] opacity-55">Mobile</p>
+          <p className="uc-font-serif truncate text-xs font-semibold tracking-tight">UnwrittenChapters</p>
         </div>
         <div className="relative h-[165px] overflow-hidden px-2 pt-2">
           <div className="uc-mockup-scroll-slow grid grid-cols-2 gap-1.5">

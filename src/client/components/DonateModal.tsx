@@ -37,28 +37,28 @@ export function DonateModal({
         if (e.target === dialogRef.current) onClose();
       }}
       aria-labelledby="donate-modal-title"
-      className={`m-auto max-h-[90vh] w-[min(95vw,56rem)] overflow-y-auto rounded-2xl border p-0 shadow-2xl ${
+      className={`m-auto max-h-[90vh] w-[min(92vw,26rem)] overflow-y-auto rounded-2xl border p-0 shadow-2xl ${
         dark
           ? 'border-[#f4f1ea]/15 bg-[#141311] text-[#f4f1ea]'
           : 'border-slate-200 bg-white text-slate-900'
       }`}
     >
-      <div className="p-6 sm:p-8">
-        <div className="flex items-start justify-between gap-4">
+      <div className="p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
             <span
-              className={`flex h-11 w-11 items-center justify-center rounded-xl ${
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
                 dark ? 'bg-[#f4f1ea] text-[#141311]' : 'bg-[#141311] text-[#f8f6f2]'
               }`}
             >
-              <Heart className="h-5 w-5" />
+              <Heart className="h-4 w-4" />
             </span>
             <div>
-              <h2 id="donate-modal-title" className="text-xl font-semibold">
+              <h2 id="donate-modal-title" className="text-lg font-semibold">
                 Support {appName}
               </h2>
-              <p className={`text-sm ${dark ? 'text-[#f4f1ea]/65' : 'text-slate-500'}`}>
-                100% free, no accounts, kept alive by community tips. Click any QR to enlarge.
+              <p className={`text-xs ${dark ? 'text-[#f4f1ea]/65' : 'text-slate-500'}`}>
+                Scan with Maya to leave a tip.
               </p>
             </div>
           </div>

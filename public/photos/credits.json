@@ -1,0 +1,63 @@
+{
+ "note": "Credits for the photographs in this folder: photos.mjs credits prints the footer block for the ones the pages use.",
+ "photos": [
+  {
+   "file": "photo-f182181937.jpg",
+   "files": [
+    "photo-f182181937-500.jpg",
+    "photo-f182181937-960.jpg",
+    "photo-f182181937.jpg"
+   ],
+   "id": "f182181937",
+   "alt": "Krasnoyarsk Pillars, Wedding photography at sunset, Professional photography, Russia",
+   "by": "Vyacheslav Argenberg",
+   "licence": "CC BY 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Krasnoyarsk_Pillars,_Wedding_photography_at_sunset,_Professional_photography,_Russia.jpg",
+   "source": "Wikimedia Commons"
+  },
+  {
+   "file": "photo-f77227234-960.jpg",
+   "files": [
+    "photo-f77227234-500.jpg",
+    "photo-f77227234-960.jpg"
+   ],
+   "id": "f77227234",
+   "alt": "Wedding Photography of Bangladesh",
+   "by": "Jubair1985",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Wedding_Photography_of_Bangladesh.jpg",
+   "source": "Wikimedia Commons"
+  },
+  {
+   "file": "photo-f125833644-960.jpg",
+   "files": [
+    "photo-f125833644-500.jpg",
+    "photo-f125833644-960.jpg"
+   ],
+   "id": "f125833644",
+   "alt": "Wedding photography example",
+   "by": "VonPhotography",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Wedding_photography_example.jpg",
+   "source": "Wikimedia Commons"
+  },
+  {
+   "file": "photo-f135848581.jpg",
+   "files": [
+    "photo-f135848581-500.jpg",
+    "photo-f135848581-960.jpg",
+    "photo-f135848581.jpg"
+   ],
+   "id": "f135848581",
+   "alt": "Emotive Photography Hochzeit Brautstrauß",
+   "by": "Emotive Photography Jan Weber",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Emotive_Photography_Hochzeit_Brautstrau%C3%9F.jpg",
+   "source": "Wikimedia Commons"
+  }
+ ]
+}

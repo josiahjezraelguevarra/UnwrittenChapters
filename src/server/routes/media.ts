@@ -6,7 +6,13 @@ import {
   buildThumbnailSizedUrl,
   fetchDriveThumbnailUrl
 } from '../drive';
-import { getMediaManifest } from '../storage';
+import {
+  isTrustedGoogleImageUrl,
+  isValidDriveId,
+  isValidRangeHeader,
+  isValidSlugParam
+} from '../security';
+import { checkRateLimit, getMediaManifest } from '../storage';
 import type { Env } from '../types';
 import { getSigningSecret, unlockCookieName } from './galleries';
 
@@ -30,6 +36,17 @@ function runWaitUntil(
 mediaRouter.get('/media/:slug/:fileId', async (c) => {
   const slug = c.req.param('slug');
   const fileId = c.req.param('fileId');
+
+  if (!isValidSlugParam(slug) || !isValidDriveId(fileId)) {
+    return c.json({ error: 'Invalid media parameters.' }, 400);
+  }
+
+  const ip = c.req.header('cf-connecting-ip')?.trim() || 'unknown';
+  const mediaAllowed = await checkRateLimit(c.env.CACHE, `rl:media:${ip}`, 600, 60);
+  if (!mediaAllowed) {
+    return c.json({ error: 'Too many media requests. Please slow down.' }, 429);
+  }
+
   const variant = c.req.query('variant') === 'full' ? 'full' : 'thumb';
   const widthParam = Number(c.req.query('w') || '800');
   const wantDownload = c.req.query('download') === '1';
@@ -45,14 +62,6 @@ mediaRouter.get('/media/:slug/:fileId', async (c) => {
     return c.json({ error: 'Gallery expired.' }, 410);
   }
 
-  const fileMeta = manifest.fileIds[fileId];
-  if (!fileMeta) {
-    return c.json({ error: 'File not found in this gallery.' }, 404);
-  }
-  if (wantDownload && !manifest.allowDownload) {
-    return c.json({ error: 'Downloads are disabled for this gallery.' }, 403);
-  }
-
   if (manifest.hasPassword) {
     const token = getCookie(c, unlockCookieName(slug));
     const ok = await verifyUnlockToken(
@@ -64,6 +73,14 @@ mediaRouter.get('/media/:slug/:fileId', async (c) => {
     if (!ok) {
       return c.json({ error: 'Password unlock required.' }, 401);
     }
+  }
+
+  const fileMeta = manifest.fileIds[fileId];
+  if (!fileMeta) {
+    return c.json({ error: 'File not found in this gallery.' }, 404);
+  }
+  if (wantDownload && !manifest.allowDownload) {
+    return c.json({ error: 'Downloads are disabled for this gallery.' }, 403);
   }
 
   const isPublic = !manifest.hasPassword;
@@ -87,34 +104,42 @@ mediaRouter.get('/media/:slug/:fileId', async (c) => {
   }
 
   if (variant === 'thumb') {
-    const thumbLink = await fetchDriveThumbnailUrl(fileId, c.env.GOOGLE_DRIVE_API_KEY);
+    const thumbLink = await fetchDriveThumbnailUrl(
+      fileMeta.driveFileId,
+      c.env.GOOGLE_DRIVE_API_KEY
+    );
     if (thumbLink) {
       const sizedUrl = buildThumbnailSizedUrl(
         thumbLink,
         Number.isFinite(widthParam) ? widthParam : 800
       );
-      const upstream = await fetch(sizedUrl);
-      if (upstream.ok && upstream.body) {
-        const rawThumbType = upstream.headers.get('Content-Type') || 'image/jpeg';
-        const safeThumbType = /^image\/(jpeg|jpg|png|webp|gif|avif)$/i.test(rawThumbType)
-          ? rawThumbType
-          : 'image/jpeg';
-
-        const headers = new Headers();
-        headers.set('Content-Type', safeThumbType);
-        headers.set('Cache-Control', cacheControl);
-        headers.set('X-Content-Type-Options', 'nosniff');
-        headers.set('Content-Security-Policy', "default-src 'none'; sandbox");
-
-        const response = new Response(upstream.body, {
-          status: 200,
-          headers
+      if (isTrustedGoogleImageUrl(sizedUrl)) {
+        const upstream = await fetch(sizedUrl, {
+          signal: AbortSignal.timeout(10_000)
         });
+        if (upstream.ok && upstream.body) {
+          const rawThumbType = upstream.headers.get('Content-Type') || 'image/jpeg';
+          const safeThumbType = /^image\/(jpeg|jpg|png|webp|gif|avif)$/i.test(rawThumbType)
+            ? rawThumbType
+            : 'image/jpeg';
 
-        if (edgeCache && cacheKey) {
-          runWaitUntil(c, edgeCache.put(cacheKey, response.clone()));
+          const headers = new Headers();
+          headers.set('Content-Type', safeThumbType);
+          headers.set('Cache-Control', cacheControl);
+          headers.set('X-Content-Type-Options', 'nosniff');
+          headers.set('Cross-Origin-Resource-Policy', 'same-origin');
+          headers.set('Content-Security-Policy', "default-src 'none'; sandbox");
+
+          const response = new Response(upstream.body, {
+            status: 200,
+            headers
+          });
+
+          if (edgeCache && cacheKey) {
+            runWaitUntil(c, edgeCache.put(cacheKey, response.clone()));
+          }
+          return response;
         }
-        return response;
       }
     }
   }
@@ -123,15 +148,24 @@ mediaRouter.get('/media/:slug/:fileId', async (c) => {
   const upstreamHeaders = new Headers();
   const range = c.req.header('range');
   if (range) {
-    upstreamHeaders.set('Range', range);
+    if (!isValidRangeHeader(range)) {
+      return c.json({ error: 'Invalid Range header.' }, 400);
+    }
+    upstreamHeaders.set('Range', range.trim());
   }
 
-  const streamUrl = buildDriveMediaStreamUrl(fileId, c.env.GOOGLE_DRIVE_API_KEY);
-  const upstream = await fetch(streamUrl, { headers: upstreamHeaders });
+  const streamUrl = buildDriveMediaStreamUrl(
+    fileMeta.driveFileId,
+    c.env.GOOGLE_DRIVE_API_KEY
+  );
+  const upstream = await fetch(streamUrl, {
+    headers: upstreamHeaders,
+    signal: AbortSignal.timeout(25_000)
+  });
 
   if (!upstream.ok && upstream.status !== 206) {
     return c.json(
-      { error: 'Unable to stream media from Google Drive.', status: upstream.status },
+      { error: 'Unable to stream media from Google Drive.' },
       upstream.status === 404 ? 404 : 502
     );
   }
@@ -151,6 +185,7 @@ mediaRouter.get('/media/:slug/:fileId', async (c) => {
   headers.set('Accept-Ranges', upstream.headers.get('Accept-Ranges') || 'bytes');
   headers.set('Cache-Control', cacheControl);
   headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('Cross-Origin-Resource-Policy', 'same-origin');
   headers.set('Content-Security-Policy', "default-src 'none'; sandbox");
   headers.set(
     'Content-Disposition',

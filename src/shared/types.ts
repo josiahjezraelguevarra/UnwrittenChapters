@@ -1,10 +1,20 @@
 import type {
+  GalleryCaptionMode,
   GalleryCardRadius,
+  GalleryCardStyle,
   GalleryFontPreset,
-  GalleryGridGap
+  GalleryGridGap,
+  GalleryHeroStyle
 } from './customization';
 
-export type { GalleryCardRadius, GalleryFontPreset, GalleryGridGap };
+export type {
+  GalleryCaptionMode,
+  GalleryCardRadius,
+  GalleryCardStyle,
+  GalleryFontPreset,
+  GalleryGridGap,
+  GalleryHeroStyle
+};
 export type GalleryLayout = 'masonry' | 'grid' | 'justified';
 export type GalleryTheme = 'light' | 'dark';
 export type MediaKind = 'image' | 'video';
@@ -41,6 +51,12 @@ export interface PublicGalleryConfig {
   theme: GalleryTheme;
   fontPreset: GalleryFontPreset;
   accentColor: string;
+  backgroundColor: string;
+  surfaceColor: string;
+  textColor: string;
+  heroStyle: GalleryHeroStyle;
+  cardStyle: GalleryCardStyle;
+  captionMode: GalleryCaptionMode;
   gridGap: GalleryGridGap;
   cardRadius: GalleryCardRadius;
   brandName: string;
@@ -67,6 +83,8 @@ export interface GalleryViewResponse {
 export interface AppPublicConfig {
   appName: string;
   donateUrl: string;
+  feedbackFormUrl: string;
+  reportFormUrl: string;
   turnstileSiteKey: string;
   turnstileRequired: boolean;
 }

@@ -47,11 +47,16 @@ function fromBase64Url(str: string): Uint8Array<ArrayBuffer> | null {
   }
 }
 
-export function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+export async function timingSafeEqual(a: string, b: string): Promise<boolean> {
+  const [digestA, digestB] = await Promise.all([
+    crypto.subtle.digest('SHA-256', textEncoder.encode(a)),
+    crypto.subtle.digest('SHA-256', textEncoder.encode(b))
+  ]);
+  const bytesA = new Uint8Array(digestA);
+  const bytesB = new Uint8Array(digestB);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < bytesA.length; i++) {
+    diff |= bytesA[i] ^ bytesB[i];
   }
   return diff === 0;
 }
@@ -153,6 +158,10 @@ export async function getPasswordVersion(passwordHash: string | null): Promise<s
   return (await sha256Hex(passwordHash)).slice(0, 12);
 }
 
+export async function getAdminTokenVersion(adminTokenHash: string): Promise<string> {
+  return (await sha256Hex(adminTokenHash)).slice(0, 16);
+}
+
 export async function signUnlockToken(
   slug: string,
   secret: string,
@@ -187,6 +196,40 @@ export async function verifyUnlockToken(
   return crypto.subtle.verify('HMAC', key, sigBytes, textEncoder.encode(payload));
 }
 
+export async function signAdminSessionToken(
+  slug: string,
+  secret: string,
+  adminTokenVersion: string,
+  ttlSeconds = 60 * 60 * 24 * 7
+): Promise<string> {
+  const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
+  const payload = `admin.${slug}.${exp}.${adminTokenVersion}`;
+  const key = await importHmacKey(secret);
+  const sig = await crypto.subtle.sign('HMAC', key, textEncoder.encode(payload));
+  return `${exp}.${toBase64Url(new Uint8Array(sig))}`;
+}
+
+export async function verifyAdminSessionToken(
+  token: string | undefined,
+  slug: string,
+  secret: string,
+  adminTokenVersion: string
+): Promise<boolean> {
+  if (!token) return false;
+  const parts = token.split('.');
+  if (parts.length !== 2) return false;
+  const [expStr, sigStr] = parts;
+  const exp = Number(expStr);
+  if (!Number.isFinite(exp) || exp < Math.floor(Date.now() / 1000)) return false;
+
+  const sigBytes = fromBase64Url(sigStr);
+  if (!sigBytes) return false;
+
+  const payload = `admin.${slug}.${exp}.${adminTokenVersion}`;
+  const key = await importHmacKey(secret);
+  return crypto.subtle.verify('HMAC', key, sigBytes, textEncoder.encode(payload));
+}
+
 export async function verifyTurnstile(
   token: string | undefined,
   secret: string | undefined,
@@ -202,11 +245,16 @@ export async function verifyTurnstile(
   });
   if (ip) body.set('remoteip', ip);
 
-  const res = await fetchFn('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-    method: 'POST',
-    body
-  });
-  if (!res.ok) return false;
-  const data = (await res.json()) as { success?: boolean };
-  return data.success === true;
+  try {
+    const res = await fetchFn('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body,
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { success?: boolean };
+    return data.success === true;
+  } catch {
+    return false;
+  }
 }

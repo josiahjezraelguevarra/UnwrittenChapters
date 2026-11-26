@@ -6,32 +6,13 @@ export interface DonateQrOption {
 }
 
 /**
- * Drop QR images into `public/qr/` (e.g. `public/qr/gcash.png`, `public/qr/maya.png`)
- * and list them here. Any image that hasn't been uploaded yet is hidden automatically.
+ * Single straightforward Maya donation QR configuration.
  */
 export const DONATE_QR_OPTIONS: DonateQrOption[] = [
-  {
-    id: 'gotyme',
-    label: 'GoTyme',
-    imagePath: '/qr/gotyme.png',
-    hint: 'Scan with GoTyme Bank app'
-  },
   {
     id: 'maya',
     label: 'Maya',
     imagePath: '/qr/maya.png',
-    hint: 'Scan with Maya app'
-  },
-  {
-    id: 'gcash',
-    label: 'GCash',
-    imagePath: '/qr/gcash.png',
-    hint: 'Scan with GCash app'
-  },
-  {
-    id: 'kofi',
-    label: 'Ko-fi / PayPal',
-    imagePath: '/qr/kofi.png',
-    hint: 'Scan to support hosting'
+    hint: 'Scan with your Maya app'
   }
 ];

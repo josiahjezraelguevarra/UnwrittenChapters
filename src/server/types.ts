@@ -1,10 +1,25 @@
 import type {
+  GalleryCaptionMode,
   GalleryCardRadius,
+  GalleryCardStyle,
+  GalleryFolder,
   GalleryFontPreset,
   GalleryGridGap,
+  GalleryHeroStyle,
   GalleryLayout,
-  GalleryTheme
+  GalleryTheme,
+  MediaItem
 } from '../shared/types';
+
+export interface StoredMediaItem extends MediaItem {
+  publicId?: string;
+  publicFolderId?: string;
+}
+
+export interface StoredGalleryFolder extends GalleryFolder {
+  publicId?: string;
+  publicParentId?: string | null;
+}
 
 export interface Env {
   DB: D1Database;
@@ -16,6 +31,8 @@ export interface Env {
   ADMIN_MODERATION_KEY?: string;
   PUBLIC_APP_NAME?: string;
   PUBLIC_DONATE_URL?: string;
+  PUBLIC_FEEDBACK_FORM_URL?: string;
+  PUBLIC_REPORT_FORM_URL?: string;
   PUBLIC_TURNSTILE_SITE_KEY?: string;
 }
 
@@ -30,6 +47,12 @@ export interface GalleryRow {
   theme: GalleryTheme;
   font_preset: GalleryFontPreset;
   accent_color: string;
+  background_color: string;
+  surface_color: string;
+  text_color: string;
+  hero_style: GalleryHeroStyle;
+  card_style: GalleryCardStyle;
+  caption_mode: GalleryCaptionMode;
   grid_gap: GalleryGridGap;
   card_radius: GalleryCardRadius;
   brand_name: string;
@@ -56,5 +79,8 @@ export interface CachedMediaManifest {
   hasPassword: boolean;
   passwordVersion: string;
   allowDownload: boolean;
-  fileIds: Record<string, { name: string; mimeType: string; kind: 'image' | 'video' }>;
+  fileIds: Record<
+    string,
+    { driveFileId: string; name: string; mimeType: string; kind: 'image' | 'video' }
+  >;
 }

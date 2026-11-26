@@ -1,6 +1,5 @@
-import type { MediaItem } from '../shared/types';
 import { getPasswordVersion } from './crypto';
-import type { CachedMediaManifest, GalleryRow } from './types';
+import type { CachedMediaManifest, GalleryRow, StoredMediaItem } from './types';
 
 const MANIFEST_TTL_SEC = 60 * 15; // 15 minutes
 
@@ -9,10 +8,12 @@ function manifestKey(slug: string): string {
 }
 
 export async function buildManifestFromRow(row: GalleryRow): Promise<CachedMediaManifest> {
-  const items = JSON.parse(row.items_json) as MediaItem[];
+  const items = JSON.parse(row.items_json) as StoredMediaItem[];
   const fileIds: CachedMediaManifest['fileIds'] = {};
   for (const item of items) {
-    fileIds[item.id] = {
+    const publicKey = item.publicId || item.id;
+    fileIds[publicKey] = {
+      driveFileId: item.id,
       name: item.name,
       mimeType: item.mimeType,
       kind: item.kind

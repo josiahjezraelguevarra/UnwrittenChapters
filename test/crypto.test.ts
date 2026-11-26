@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   generateSlug,
+  getAdminTokenVersion,
   hashPassword,
   sanitizeCustomSlug,
+  signAdminSessionToken,
   signUnlockToken,
+  timingSafeEqual,
+  verifyAdminSessionToken,
   verifyPassword,
   verifyUnlockToken
 } from '../src/server/crypto';
@@ -29,5 +33,19 @@ describe('crypto utilities', () => {
     expect(sanitizeCustomSlug('admin')).toBeNull();
     expect(sanitizeCustomSlug('ab')).toBeNull();
     expect(generateSlug(8)).toHaveLength(8);
+  });
+
+  it('compares unequal-length secrets safely and signs admin session cookies', async () => {
+    expect(await timingSafeEqual('secret-a', 'secret-a')).toBe(true);
+    expect(await timingSafeEqual('secret-a', 'secret-longer')).toBe(false);
+    expect(await timingSafeEqual('secret-a', 'secret-b')).toBe(false);
+
+    const secret = 'super-secret-signing-key-32-chars';
+    const ver1 = await getAdminTokenVersion('hash-v1');
+    const ver2 = await getAdminTokenVersion('hash-v2');
+    const token = await signAdminSessionToken('my-slug', secret, ver1, 60);
+    expect(await verifyAdminSessionToken(token, 'my-slug', secret, ver1)).toBe(true);
+    expect(await verifyAdminSessionToken(token, 'my-slug', secret, ver2)).toBe(false);
+    expect(await verifyAdminSessionToken(token, 'other-slug', secret, ver1)).toBe(false);
   });
 });

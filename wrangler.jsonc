@@ -25,6 +25,8 @@
   "vars": {
     "PUBLIC_APP_NAME": "UnwrittenChapters",
     "PUBLIC_DONATE_URL": "",
+    "PUBLIC_FEEDBACK_FORM_URL": "",
+    "PUBLIC_REPORT_FORM_URL": "",
     "PUBLIC_TURNSTILE_SITE_KEY": ""
   }
 }

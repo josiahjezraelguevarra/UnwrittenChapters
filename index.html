@@ -3,19 +3,123 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>UnwrittenChapters — Instant Google Drive Client Galleries</title>
+    <title>UnwrittenChapters — Free Google Drive Client Photo Galleries</title>
+    <meta
+      name="description"
+      content="Turn any public Google Drive folder into a shareable client photo and video gallery. Free hosting, zero accounts, password protection, favorites, and batch ZIP downloads."
+    />
+    <meta
+      name="robots"
+      content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+    />
+    <meta name="application-name" content="UnwrittenChapters" />
+    <meta name="theme-color" content="#f8f6f2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#12110f" media="(prefers-color-scheme: dark)" />
+    <link rel="canonical" href="/" />
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <link rel="icon" type="image/png" href="/logo.png" />
     <link rel="apple-touch-icon" href="/logo.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="UnwrittenChapters" />
+    <meta property="og:title" content="UnwrittenChapters — Free Google Drive Client Photo Galleries" />
+    <meta
+      property="og:description"
+      content="Turn any public Google Drive folder into a shareable client photo and video gallery. Free hosting, zero accounts, password protection, favorites, and batch ZIP downloads."
+    />
+    <meta property="og:image" content="/og-cover.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="UnwrittenChapters — Turn Google Drive folders into client photo and video galleries"
+    />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="UnwrittenChapters — Free Google Drive Client Photo Galleries" />
+    <meta
+      name="twitter:description"
+      content="Turn any public Google Drive folder into a shareable client photo and video gallery. Free hosting, zero accounts, password protection, favorites, and batch ZIP downloads."
+    />
+    <meta name="twitter:image" content="/og-cover.png" />
+    <meta
+      name="twitter:image:alt"
+      content="UnwrittenChapters — Turn Google Drive folders into client photo and video galleries"
+    />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Playfair+Display:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Playfair+Display:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
     />
-    <meta
-      name="description"
-      content="Turn any public Google Drive folder into a clean, shareable client photo & video gallery. No account needed, completely free."
-    />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebApplication",
+            "name": "UnwrittenChapters",
+            "applicationCategory": "PhotographyApplication",
+            "operatingSystem": "Web",
+            "description": "Turn any public Google Drive folder into a clean, shareable client photo and video gallery without accounts or re-uploading files.",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            },
+            "featureList": [
+              "Zero-account client photo and HD video galleries from Google Drive links",
+              "Masonry, justified, and square grid layouts with customizable themes",
+              "Client favorites selection with Lightroom .txt and .csv filename export",
+              "Password protection and link expiration controls",
+              "Client-side batch ZIP downloads"
+            ]
+          },
+          {
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Do my photos or videos get copied off Google Drive?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "No. UnwrittenChapters indexes metadata from your publicly shared Google Drive folder ('Anyone with the link -> Viewer') while your original files remain hosted on Google Drive."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Do I or my clients need an account?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "No account or sign-up is required. Clients browse your Share Link directly, and creators control settings using a private Manage Link."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Can clients heart favorites and export selections for Lightroom?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes. Clients can heart favorite photos and videos, and creators can export hearted filenames directly as .txt or .csv for Lightroom filtering."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What folder sizes are supported?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Each gallery indexes up to 3 nested subfolder levels, 40 subfolders, and 2,000 photo or video items."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

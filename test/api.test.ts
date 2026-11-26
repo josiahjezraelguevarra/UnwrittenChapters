@@ -94,26 +94,32 @@ function createMemoryDB() {
               theme: args[7] as GalleryRow['theme'],
               font_preset: args[8] as GalleryRow['font_preset'],
               accent_color: args[9] as string,
-              grid_gap: args[10] as GalleryRow['grid_gap'],
-              card_radius: args[11] as GalleryRow['card_radius'],
-              brand_name: args[12] as string,
-              brand_url: args[13] as string,
-              password_hash: args[14] as string | null,
-              admin_token_hash: args[15] as string,
-              allow_download: args[16] as number,
-              allow_likes: args[17] as number,
-              expires_at: args[18] as number | null,
-              status: args[19] as string,
-              items_json: args[20] as string,
-              folders_json: args[21] as string,
-              item_count: args[22] as number,
-              view_count: args[23] as number,
-              synced_at: args[24] as number,
-              created_at: args[25] as number
+              background_color: args[10] as string,
+              surface_color: args[11] as string,
+              text_color: args[12] as string,
+              hero_style: args[13] as GalleryRow['hero_style'],
+              card_style: args[14] as GalleryRow['card_style'],
+              caption_mode: args[15] as GalleryRow['caption_mode'],
+              grid_gap: args[16] as GalleryRow['grid_gap'],
+              card_radius: args[17] as GalleryRow['card_radius'],
+              brand_name: args[18] as string,
+              brand_url: args[19] as string,
+              password_hash: args[20] as string | null,
+              admin_token_hash: args[21] as string,
+              allow_download: args[22] as number,
+              allow_likes: args[23] as number,
+              expires_at: args[24] as number | null,
+              status: args[25] as string,
+              items_json: args[26] as string,
+              folders_json: args[27] as string,
+              item_count: args[28] as number,
+              view_count: args[29] as number,
+              synced_at: args[30] as number,
+              created_at: args[31] as number
             };
             galleries.set(row.id, row);
           } else if (sql.startsWith('UPDATE galleries SET') && sql.includes('font_preset')) {
-            const id = args[15] as string;
+            const id = args[21] as string;
             const existing = galleries.get(id);
             if (existing) {
               existing.title = args[0] as string;
@@ -124,13 +130,24 @@ function createMemoryDB() {
               existing.theme = args[5] as GalleryRow['theme'];
               existing.font_preset = args[6] as GalleryRow['font_preset'];
               existing.accent_color = args[7] as string;
-              existing.grid_gap = args[8] as GalleryRow['grid_gap'];
-              existing.card_radius = args[9] as GalleryRow['card_radius'];
-              existing.cover_file_id = args[10] as string | null;
-              existing.allow_download = args[11] as number;
-              existing.allow_likes = args[12] as number;
-              existing.password_hash = args[13] as string | null;
-              existing.expires_at = args[14] as number | null;
+              existing.background_color = args[8] as string;
+              existing.surface_color = args[9] as string;
+              existing.text_color = args[10] as string;
+              existing.hero_style = args[11] as GalleryRow['hero_style'];
+              existing.card_style = args[12] as GalleryRow['card_style'];
+              existing.caption_mode = args[13] as GalleryRow['caption_mode'];
+              existing.grid_gap = args[14] as GalleryRow['grid_gap'];
+              existing.card_radius = args[15] as GalleryRow['card_radius'];
+              existing.cover_file_id = args[16] as string | null;
+              existing.allow_download = args[17] as number;
+              existing.allow_likes = args[18] as number;
+              existing.password_hash = args[19] as string | null;
+              existing.expires_at = args[20] as number | null;
+            }
+          } else if (sql.startsWith('UPDATE galleries SET admin_token_hash')) {
+            const existing = galleries.get(args[1] as string);
+            if (existing) {
+              existing.admin_token_hash = args[0] as string;
             }
           } else if (sql.startsWith('INSERT INTO likes')) {
             likes.add(`${args[0]}:${args[1]}:${args[2]}`);
@@ -282,15 +299,33 @@ describe('Gallery API & Media Proxy security', () => {
     const cookieHeader = goodUnlock.headers.get('set-cookie')!;
     const cookiePair = cookieHeader.split(';')[0];
 
-    // Unlocked gallery returns items
+    // Unlocked gallery returns items with opaque IDs (never raw Google Drive file IDs)
     const unlockedRes = await app.request(
       `/api/galleries/${created.slug}`,
       { headers: { Cookie: cookiePair } },
       env
     );
-    const unlockedBody = (await unlockedRes.json()) as { locked: boolean; items: unknown[] };
+    const unlockedBody = (await unlockedRes.json()) as {
+      locked: boolean;
+      gallery: { coverFileId: string | null };
+      items: Array<{ id: string; folderId: string }>;
+      folders: Array<{ id: string }>;
+    };
     expect(unlockedBody.locked).toBe(false);
     expect(unlockedBody.items).toHaveLength(1);
+    const opaqueFileId = unlockedBody.items[0].id;
+    expect(opaqueFileId).not.toBe('imgFile00001');
+    expect(unlockedBody.gallery.coverFileId).toBe(opaqueFileId);
+    expect(unlockedBody.items[0].folderId).not.toBe('folderABC12345');
+    expect(unlockedBody.folders[0].id).not.toBe('folderABC12345');
+
+    // Raw Drive file ID must NOT work on public media proxy
+    const rawDriveIdRes = await app.request(
+      `/api/media/${created.slug}/imgFile00001?variant=thumb`,
+      { headers: { Cookie: cookiePair } },
+      env
+    );
+    expect(rawDriveIdRes.status).toBe(404);
 
     // Rejects arbitrary fileId not belonging to this gallery (no open proxy!)
     const foreignFileRes = await app.request(
@@ -300,9 +335,9 @@ describe('Gallery API & Media Proxy security', () => {
     );
     expect(foreignFileRes.status).toBe(404);
 
-    // Serves valid file with private cache header when password-protected
+    // Serves valid file via opaque ID with private cache header when password-protected
     const validMediaRes = await app.request(
-      `/api/media/${created.slug}/imgFile00001?variant=thumb`,
+      `/api/media/${created.slug}/${opaqueFileId}?variant=thumb`,
       { headers: { Cookie: cookiePair } },
       env
     );
@@ -348,7 +383,7 @@ describe('Gallery API & Media Proxy security', () => {
     expect(staleBody.locked).toBe(true);
 
     const staleCookieMedia = await app.request(
-      `/api/media/${created.slug}/imgFile00001?variant=thumb`,
+      `/api/media/${created.slug}/${opaqueFileId}?variant=thumb`,
       { headers: { Cookie: cookiePair } },
       env
     );
@@ -380,15 +415,32 @@ describe('Gallery API & Media Proxy security', () => {
       },
       env
     );
-    const created = (await createRes.json()) as { slug: string; managePath: string };
+    const created = (await createRes.json()) as {
+      slug: string;
+      managePath: string;
+      gallery: { coverFileId: string };
+    };
     const adminToken = created.managePath.split('#')[1];
+    const opaqueFileId = created.gallery.coverFileId;
+
+    // Raw Drive ID is rejected by likes endpoint
+    const rawLikeRes = await app.request(
+      `/api/galleries/${created.slug}/likes`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId: 'imgFile00001', visitorId: 'visitor_12345678' })
+      },
+      env
+    );
+    expect(rawLikeRes.status).toBe(404);
 
     const likeRes = await app.request(
       `/api/galleries/${created.slug}/likes`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileId: 'imgFile00001', visitorId: 'visitor_12345678' })
+        body: JSON.stringify({ fileId: opaqueFileId, visitorId: 'visitor_12345678' })
       },
       env
     );
@@ -420,8 +472,14 @@ describe('Gallery API & Media Proxy security', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           driveUrl: 'https://drive.google.com/drive/folders/folderABC12345',
-          fontPreset: 'serif',
+          fontPreset: 'fineart',
           accentColor: '#E11D48',
+          backgroundColor: '#F3ECE1',
+          surfaceColor: '#FAF6EF',
+          textColor: '#2C221E',
+          heroStyle: 'split',
+          cardStyle: 'mat',
+          captionMode: 'below',
           gridGap: 'airy',
           cardRadius: 'sharp'
         })
@@ -435,12 +493,24 @@ describe('Gallery API & Media Proxy security', () => {
       gallery: {
         fontPreset: string;
         accentColor: string;
+        backgroundColor: string;
+        surfaceColor: string;
+        textColor: string;
+        heroStyle: string;
+        cardStyle: string;
+        captionMode: string;
         gridGap: string;
         cardRadius: string;
       };
     };
-    expect(created.gallery.fontPreset).toBe('serif');
+    expect(created.gallery.fontPreset).toBe('fineart');
     expect(created.gallery.accentColor).toBe('#e11d48');
+    expect(created.gallery.backgroundColor).toBe('#f3ece1');
+    expect(created.gallery.surfaceColor).toBe('#faf6ef');
+    expect(created.gallery.textColor).toBe('#2c221e');
+    expect(created.gallery.heroStyle).toBe('split');
+    expect(created.gallery.cardStyle).toBe('mat');
+    expect(created.gallery.captionMode).toBe('below');
     expect(created.gallery.gridGap).toBe('airy');
     expect(created.gallery.cardRadius).toBe('sharp');
 
@@ -456,6 +526,12 @@ describe('Gallery API & Media Proxy security', () => {
         body: JSON.stringify({
           fontPreset: 'mono',
           accentColor: 'not-a-color',
+          backgroundColor: '#11100E',
+          surfaceColor: 'invalid-surface',
+          textColor: '#F4EFE6',
+          heroStyle: 'minimal',
+          cardStyle: 'framed',
+          captionMode: 'hidden',
           gridGap: 'compact',
           cardRadius: 'soft'
         })
@@ -467,12 +543,24 @@ describe('Gallery API & Media Proxy security', () => {
       gallery: {
         fontPreset: string;
         accentColor: string;
+        backgroundColor: string;
+        surfaceColor: string;
+        textColor: string;
+        heroStyle: string;
+        cardStyle: string;
+        captionMode: string;
         gridGap: string;
         cardRadius: string;
       };
     };
     expect(patched.gallery.fontPreset).toBe('mono');
     expect(patched.gallery.accentColor).toBe('');
+    expect(patched.gallery.backgroundColor).toBe('#11100e');
+    expect(patched.gallery.surfaceColor).toBe('');
+    expect(patched.gallery.textColor).toBe('#f4efe6');
+    expect(patched.gallery.heroStyle).toBe('minimal');
+    expect(patched.gallery.cardStyle).toBe('framed');
+    expect(patched.gallery.captionMode).toBe('hidden');
     expect(patched.gallery.gridGap).toBe('compact');
     expect(patched.gallery.cardRadius).toBe('soft');
 
@@ -523,5 +611,151 @@ describe('Gallery API & Media Proxy security', () => {
     expect(fallbackBody.source).toBe('fallback');
     expect(fallbackBody.reference.length).toBeGreaterThan(2);
     expect(fallbackBody.text.length).toBeGreaterThan(10);
+  });
+
+  it('enforces HttpOnly admin cookies, token rotation, CSRF origin checks, password policy, and strict inputs', async () => {
+    // Rejects short passwords (< 6 chars)
+    const shortPwRes = await app.request(
+      '/api/galleries',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driveUrl: 'https://drive.google.com/drive/folders/folderABC12345',
+          password: '123'
+        })
+      },
+      env
+    );
+    expect(shortPwRes.status).toBe(400);
+
+    // Rejects unexpected JSON payload fields
+    const extraFieldRes = await app.request(
+      '/api/galleries',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driveUrl: 'https://drive.google.com/drive/folders/folderABC12345',
+          isAdmin: true
+        })
+      },
+      env
+    );
+    expect(extraFieldRes.status).toBe(400);
+
+    // Rejects cross-origin POST requests
+    const csrfRes = await app.request(
+      '/api/galleries',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: 'https://evil.example'
+        },
+        body: JSON.stringify({
+          driveUrl: 'https://drive.google.com/drive/folders/folderABC12345'
+        })
+      },
+      env
+    );
+    expect(csrfRes.status).toBe(403);
+
+    // Create gallery & verify HttpOnly admin cookie issuance
+    const createRes = await app.request(
+      '/api/galleries',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driveUrl: 'https://drive.google.com/drive/folders/folderABC12345'
+        })
+      },
+      env
+    );
+    expect(createRes.status).toBe(201);
+    expect(createRes.headers.get('cache-control')).toBe('private, no-store');
+    const setCookieHeader = createRes.headers.get('set-cookie') || '';
+    expect(setCookieHeader).toContain('HttpOnly');
+
+    const created = (await createRes.json()) as { slug: string; managePath: string };
+    const adminCookiePair = setCookieHeader.split(';')[0];
+    const originalToken = created.managePath.split('#')[1];
+
+    // Cookie alone authenticates GET /manage without Authorization header
+    const cookieManageRes = await app.request(
+      `/api/galleries/${created.slug}/manage`,
+      { headers: { Cookie: adminCookiePair } },
+      env
+    );
+    expect(cookieManageRes.status).toBe(200);
+    expect(cookieManageRes.headers.get('cache-control')).toBe('private, no-store');
+
+    // Rotate manage token -> invalidates old token & old cookie
+    const rotateRes = await app.request(
+      `/api/galleries/${created.slug}/manage/rotate-token`,
+      {
+        method: 'POST',
+        headers: { Cookie: adminCookiePair }
+      },
+      env
+    );
+    expect(rotateRes.status).toBe(200);
+    const rotated = (await rotateRes.json()) as { managePath: string };
+    const rotatedToken = rotated.managePath.split('#')[1];
+    expect(rotatedToken).not.toBe(originalToken);
+
+    const oldTokenRes = await app.request(
+      `/api/galleries/${created.slug}/manage`,
+      { headers: { Authorization: `Bearer ${originalToken}` } },
+      env
+    );
+    expect(oldTokenRes.status).toBe(401);
+
+    const oldCookieRes = await app.request(
+      `/api/galleries/${created.slug}/manage`,
+      { headers: { Cookie: adminCookiePair } },
+      env
+    );
+    expect(oldCookieRes.status).toBe(401);
+
+    // Exchange new token for session cookie via /manage/session
+    const sessionRes = await app.request(
+      `/api/galleries/${created.slug}/manage/session`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: rotatedToken })
+      },
+      env
+    );
+    expect(sessionRes.status).toBe(200);
+    const newCookiePair = (sessionRes.headers.get('set-cookie') || '').split(';')[0];
+
+    const newCookieManageRes = await app.request(
+      `/api/galleries/${created.slug}/manage`,
+      { headers: { Cookie: newCookiePair } },
+      env
+    );
+    expect(newCookieManageRes.status).toBe(200);
+    const manageBody = (await newCookieManageRes.json()) as {
+      items: Array<{ id: string }>;
+    };
+    const opaqueItemId = manageBody.items[0].id;
+
+    // Media proxy rejects invalid Range header and invalid params
+    const badRangeRes = await app.request(
+      `/api/media/${created.slug}/${opaqueItemId}?variant=full`,
+      { headers: { Range: 'bytes=evil-injection' } },
+      env
+    );
+    expect(badRangeRes.status).toBe(400);
+
+    const badParamRes = await app.request(
+      `/api/media/INVALID_SLUG!/imgFile00001?variant=thumb`,
+      {},
+      env
+    );
+    expect(badParamRes.status).toBe(400);
   });
 });

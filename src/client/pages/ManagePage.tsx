@@ -10,27 +10,33 @@ import {
   Heart,
   KeyRound,
   LayoutGrid,
-  Loader2,
   Lock,
+  Maximize2,
+  Minimize2,
   Monitor,
   Palette,
   RefreshCw,
   RotateCcw,
   Rows3,
   Save,
+  ShieldCheck,
   Smartphone,
   Square,
-  Trash2
+  Trash2,
+  X
 } from 'lucide-react';
 import type {
+  GalleryCaptionMode,
   GalleryCardRadius,
+  GalleryCardStyle,
   GalleryFontPreset,
   GalleryGridGap,
+  GalleryHeroStyle,
   GalleryLayout,
   GalleryTheme,
   PublicGalleryConfig
 } from '../../shared/types';
-import { sanitizeHexColor } from '../../shared/customization';
+import { sanitizeHexColor, type GalleryPalettePreset } from '../../shared/customization';
 import { SUPPORT_EMAIL, buildSupportMailto } from '../../shared/contact';
 import { CustomSelect, type CustomSelectOption } from '../components/CustomSelect';
 import {
@@ -40,19 +46,24 @@ import {
 import { GallerySurface, type MediaFilter } from '../components/GallerySurface';
 import { SupportErrorAlert } from '../components/SupportErrorAlert';
 import { ToggleField } from '../components/ToggleField';
-import { LAYOUT_SELECT_OPTIONS, THEME_SELECT_OPTIONS } from '../config/galleryOptions';
+import {
+  EXPIRY_SELECT_OPTIONS,
+  LAYOUT_SELECT_OPTIONS,
+  THEME_SELECT_OPTIONS
+} from '../config/galleryOptions';
 import {
   ApiError,
   deleteGallery,
+  exchangeManageSession,
   fetchManageGallery,
-  loadAdminToken,
   mediaThumbUrl,
   removeRecentGallery,
-  saveAdminToken,
+  rotateManageToken,
   syncGalleryDrive,
   updateManageGallery,
   type ManageGalleryResponse
 } from '../lib/api';
+import { usePageSeo } from '../lib/seo';
 
 interface ManagePageProps {
   slug: string;
@@ -61,28 +72,38 @@ interface ManagePageProps {
 
 export function ManagePage({ slug, onNavigate }: ManagePageProps) {
   const initialHashToken = window.location.hash.replace(/^#/, '').trim();
-  const [adminToken, setAdminToken] = useState<string>(() => {
-    if (initialHashToken) {
-      saveAdminToken(slug, initialHashToken);
-      return initialHashToken;
-    }
-    return loadAdminToken(slug);
-  });
+  const initialCreated =
+    new URLSearchParams(window.location.search).get('created') === '1';
+
+  // Kept in memory only for the current view — never written to localStorage
+  const [sessionManageToken, setSessionManageToken] = useState<string>(initialHashToken);
+  const [authRequired, setAuthRequired] = useState(false);
   const [tokenInput, setTokenInput] = useState('');
+  const [authenticating, setAuthenticating] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [justCreated, setJustCreated] = useState(initialCreated);
+  const [rotatingToken, setRotatingToken] = useState(false);
 
   useEffect(() => {
-    // Scrub secret manage token from URL bar & history after reading
-    if (window.location.hash) {
-      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+    // Scrub secret manage token & created flag from URL bar & history after reading
+    if (window.location.hash || window.location.search) {
+      window.history.replaceState(null, '', window.location.pathname);
     }
   }, []);
 
   const [data, setData] = useState<ManageGalleryResponse | null>(null);
-  const [loading, setLoading] = useState(Boolean(adminToken));
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
 
   const [title, setTitle] = useState('');
+
+  usePageSeo({
+    title: title ? `Manage ${title} — UnwrittenChapters` : 'Manage Gallery — UnwrittenChapters',
+    description: 'Manage gallery settings, theme customization, password lock, and client favorites.',
+    robots: 'noindex, nofollow',
+    canonicalPath: null
+  });
   const [description, setDescription] = useState('');
   const [brandName, setBrandName] = useState('');
   const [brandUrl, setBrandUrl] = useState('');
@@ -90,6 +111,12 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
   const [theme, setTheme] = useState<GalleryTheme>('light');
   const [fontPreset, setFontPreset] = useState<GalleryFontPreset>('sans');
   const [accentColor, setAccentColor] = useState('');
+  const [backgroundColor, setBackgroundColor] = useState('');
+  const [surfaceColor, setSurfaceColor] = useState('');
+  const [textColor, setTextColor] = useState('');
+  const [heroStyle, setHeroStyle] = useState<GalleryHeroStyle>('banner');
+  const [cardStyle, setCardStyle] = useState<GalleryCardStyle>('clean');
+  const [captionMode, setCaptionMode] = useState<GalleryCaptionMode>('hover');
   const [gridGap, setGridGap] = useState<GalleryGridGap>('normal');
   const [cardRadius, setCardRadius] = useState<GalleryCardRadius>('rounded');
   const [coverFileId, setCoverFileId] = useState<string>('');
@@ -97,10 +124,13 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
   const [allowLikes, setAllowLikes] = useState(true);
   const [newPassword, setNewPassword] = useState('');
   const [clearPassword, setClearPassword] = useState(false);
+  const [expiryAction, setExpiryAction] = useState<string>('');
 
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
+  const [copiedManage, setCopiedManage] = useState(false);
+  const [copiedLightroom, setCopiedLightroom] = useState(false);
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -109,7 +139,8 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
   const [previewFilter, setPreviewFilter] = useState<MediaFilter>('all');
   const [previewFolderPath, setPreviewFolderPath] = useState<string>('__ALL__');
   const [previewViewport, setPreviewViewport] = useState<'desktop' | 'mobile'>('desktop');
-  const [activeTab, setActiveTab] = useState<'details' | 'design' | 'access'>('details');
+  const [previewFullscreen, setPreviewFullscreen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'details' | 'design' | 'access'>('design');
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -125,6 +156,12 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
     setTheme(g.theme);
     setFontPreset(g.fontPreset || 'sans');
     setAccentColor(g.accentColor || '');
+    setBackgroundColor(g.backgroundColor || '');
+    setSurfaceColor(g.surfaceColor || '');
+    setTextColor(g.textColor || '');
+    setHeroStyle(g.heroStyle || 'banner');
+    setCardStyle(g.cardStyle || 'clean');
+    setCaptionMode(g.captionMode || 'hover');
     setGridGap(g.gridGap || 'normal');
     setCardRadius(g.cardRadius || 'rounded');
     setCoverFileId(g.coverFileId || '');
@@ -132,20 +169,29 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
     setAllowLikes(g.allowLikes);
     setNewPassword('');
     setClearPassword(false);
+    setExpiryAction('');
   }, []);
 
   const loadManage = useCallback(
-    async (token: string) => {
-      if (!token) return;
+    async (hashTokenToExchange?: string) => {
       setLoading(true);
       setError('');
+      setAuthError('');
       try {
-        const res = await fetchManageGallery(slug, token);
-        saveAdminToken(slug, token);
+        if (hashTokenToExchange) {
+          await exchangeManageSession(slug, hashTokenToExchange);
+        }
+        const res = await fetchManageGallery(slug);
+        setAuthRequired(false);
         setData(res);
         applyGalleryToForm(res.gallery);
       } catch (err) {
-        setError(err instanceof ApiError ? err.message : 'Unable to load gallery settings.');
+        if (err instanceof ApiError && err.status === 401) {
+          setAuthRequired(true);
+          setData(null);
+        } else {
+          setError(err instanceof ApiError ? err.message : 'Unable to load gallery settings.');
+        }
       } finally {
         setLoading(false);
       }
@@ -154,8 +200,10 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
   );
 
   useEffect(() => {
-    if (adminToken) loadManage(adminToken);
-  }, [adminToken, loadManage]);
+    void loadManage(initialHashToken && !initialCreated ? initialHashToken : undefined);
+    // Run once per slug mount using the initial URL hash if present
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
 
   useEffect(() => {
     const dialog = deleteDialogRef.current;
@@ -163,6 +211,27 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
     if (confirmDeleteOpen && !dialog.open) dialog.showModal();
     else if (!confirmDeleteOpen && dialog.open) dialog.close();
   }, [confirmDeleteOpen]);
+
+  useEffect(() => {
+    if (!previewFullscreen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPreviewFullscreen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [previewFullscreen]);
+
+  const manageExpiryOptions: CustomSelectOption<string>[] = useMemo(() => {
+    const currentLabel = data?.gallery.expiresAt
+      ? `Keep current (expires ${new Date(data.gallery.expiresAt).toLocaleDateString()})`
+      : 'Keep current (never expires)';
+    return [
+      { value: '', label: currentLabel, description: 'Leave expiration unchanged' },
+      ...EXPIRY_SELECT_OPTIONS.map((opt) =>
+        opt.value === '' ? { ...opt, value: 'never' } : opt
+      )
+    ];
+  }, [data?.gallery.expiresAt]);
 
   const coverSelectOptions: CustomSelectOption<string>[] = useMemo(() => {
     if (!data) return [];
@@ -217,6 +286,12 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
       theme,
       fontPreset,
       accentColor: sanitizeHexColor(accentColor),
+      backgroundColor: sanitizeHexColor(backgroundColor),
+      surfaceColor: sanitizeHexColor(surfaceColor),
+      textColor: sanitizeHexColor(textColor),
+      heroStyle,
+      cardStyle,
+      captionMode,
       gridGap,
       cardRadius,
       coverFileId: coverFileId || data.gallery.coverFileId,
@@ -233,6 +308,12 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
     theme,
     fontPreset,
     accentColor,
+    backgroundColor,
+    surfaceColor,
+    textColor,
+    heroStyle,
+    cardStyle,
+    captionMode,
     gridGap,
     cardRadius,
     coverFileId,
@@ -252,13 +333,20 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
       theme !== g.theme ||
       fontPreset !== (g.fontPreset || 'sans') ||
       sanitizeHexColor(accentColor) !== (g.accentColor || '') ||
+      sanitizeHexColor(backgroundColor) !== (g.backgroundColor || '') ||
+      sanitizeHexColor(surfaceColor) !== (g.surfaceColor || '') ||
+      sanitizeHexColor(textColor) !== (g.textColor || '') ||
+      heroStyle !== (g.heroStyle || 'banner') ||
+      cardStyle !== (g.cardStyle || 'clean') ||
+      captionMode !== (g.captionMode || 'hover') ||
       gridGap !== (g.gridGap || 'normal') ||
       cardRadius !== (g.cardRadius || 'rounded') ||
       (coverFileId || '') !== (g.coverFileId || '') ||
       allowDownload !== g.allowDownload ||
       allowLikes !== g.allowLikes ||
       Boolean(newPassword.trim()) ||
-      clearPassword
+      clearPassword ||
+      expiryAction !== ''
     );
   }, [
     data,
@@ -270,13 +358,20 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
     theme,
     fontPreset,
     accentColor,
+    backgroundColor,
+    surfaceColor,
+    textColor,
+    heroStyle,
+    cardStyle,
+    captionMode,
     gridGap,
     cardRadius,
     coverFileId,
     allowDownload,
     allowLikes,
     newPassword,
-    clearPassword
+    clearPassword,
+    expiryAction
   ]);
 
   const resetDraft = () => {
@@ -284,13 +379,12 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
     applyGalleryToForm(data.gallery);
   };
 
-  const handleSave = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!adminToken) return;
+  const handleSave = async (e?: FormEvent) => {
+    e?.preventDefault();
     setSaving(true);
     setError('');
     try {
-      const res = await updateManageGallery(slug, adminToken, {
+      const res = await updateManageGallery(slug, {
         title,
         description,
         brandName,
@@ -299,11 +393,22 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
         theme,
         fontPreset,
         accentColor: sanitizeHexColor(accentColor),
+        backgroundColor: sanitizeHexColor(backgroundColor),
+        surfaceColor: sanitizeHexColor(surfaceColor),
+        textColor: sanitizeHexColor(textColor),
+        heroStyle,
+        cardStyle,
+        captionMode,
         gridGap,
         cardRadius,
         coverFileId: coverFileId || undefined,
         allowDownload,
         allowLikes,
+        ...(expiryAction === 'never'
+          ? { expiresInDays: null }
+          : expiryAction
+            ? { expiresInDays: Number(expiryAction) }
+            : {}),
         ...(clearPassword
           ? { clearPassword: true }
           : newPassword.trim()
@@ -321,11 +426,10 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
   };
 
   const handleSync = async () => {
-    if (!adminToken) return;
     setSyncing(true);
     setError('');
     try {
-      const res = await syncGalleryDrive(slug, adminToken);
+      const res = await syncGalleryDrive(slug);
       setData((prev) =>
         prev
           ? {
@@ -345,16 +449,33 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
   };
 
   const handleDelete = async () => {
-    if (!adminToken) return;
     setDeleting(true);
     try {
-      await deleteGallery(slug, adminToken);
+      await deleteGallery(slug);
       removeRecentGallery(slug);
       onNavigate('/');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not delete gallery.');
       setDeleting(false);
       setConfirmDeleteOpen(false);
+    }
+  };
+
+  const handleRotateManageLink = async () => {
+    setRotatingToken(true);
+    setError('');
+    try {
+      const res = await rotateManageToken(slug);
+      const newToken = res.managePath.split('#')[1] || '';
+      if (newToken) {
+        setSessionManageToken(newToken);
+      }
+      setJustCreated(true);
+      showToast('Generated a new Secret Manage Link. Previous links are now revoked.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not rotate manage link.');
+    } finally {
+      setRotatingToken(false);
     }
   };
 
@@ -391,7 +512,7 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
     URL.revokeObjectURL(url);
   };
 
-  if (!adminToken) {
+  if (authRequired) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-stone-50 px-4">
         <div className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
@@ -404,12 +525,27 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
             <code>/g/{slug}</code>.
           </p>
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               const clean = tokenInput.includes('#')
                 ? tokenInput.split('#')[1].trim()
                 : tokenInput.trim();
-              if (clean) setAdminToken(clean);
+              if (!clean) return;
+              setAuthenticating(true);
+              setAuthError('');
+              try {
+                await exchangeManageSession(slug, clean);
+                setSessionManageToken(clean);
+                setTokenInput('');
+                setAuthRequired(false);
+                await loadManage();
+              } catch (err) {
+                setAuthError(
+                  err instanceof ApiError ? err.message : 'Invalid manage token.'
+                );
+              } finally {
+                setAuthenticating(false);
+              }
             }}
             className="mt-4 space-y-3"
           >
@@ -421,11 +557,17 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
               placeholder="Paste token or full manage URL"
               className="min-h-[44px] w-full rounded-xl border border-stone-300 px-3 text-sm"
             />
+            {authError && (
+              <p role="alert" className="text-xs font-medium text-red-600">
+                {authError}
+              </p>
+            )}
             <button
               type="submit"
-              className="min-h-[44px] w-full rounded-xl bg-slate-900 text-sm font-semibold text-white"
+              disabled={authenticating}
+              className="min-h-[44px] w-full rounded-xl bg-slate-900 text-sm font-semibold text-white disabled:opacity-50"
             >
-              Open Manager
+              {authenticating ? 'Verifying...' : 'Open Manager'}
             </button>
           </form>
         </div>
@@ -435,8 +577,48 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-stone-50">
-        <Loader2 className="h-6 w-6 animate-spin text-slate-700" />
+      <div className="min-h-screen bg-stone-50">
+        <header className="border-b border-stone-200 bg-white">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 animate-pulse rounded-lg bg-stone-200" />
+              <div className="space-y-1.5">
+                <div className="h-5 w-48 animate-pulse rounded bg-stone-200" />
+                <div className="h-3.5 w-64 animate-pulse rounded bg-stone-200/80" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-10 w-28 animate-pulse rounded-xl bg-stone-200" />
+              <div className="h-10 w-32 animate-pulse rounded-xl bg-stone-200" />
+              <div className="h-10 w-28 animate-pulse rounded-xl bg-stone-200" />
+            </div>
+          </div>
+        </header>
+        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+          <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
+            <div className="space-y-4 rounded-2xl border border-stone-200 bg-white p-6 xl:col-span-5">
+              <div className="h-6 w-40 animate-pulse rounded bg-stone-200" />
+              <div className="h-10 w-full animate-pulse rounded-xl bg-stone-100" />
+              <div className="grid grid-cols-2 gap-2">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="h-12 animate-pulse rounded-xl bg-stone-200/70" />
+                ))}
+              </div>
+              <div className="h-32 w-full animate-pulse rounded-xl bg-stone-100" />
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white xl:col-span-7">
+              <div className="h-12 border-b border-stone-200 bg-stone-100/80" />
+              <div className="space-y-4 p-6">
+                <div className="h-36 animate-pulse rounded-xl bg-stone-200/80" />
+                <div className="grid grid-cols-3 gap-3">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="aspect-[4/3] animate-pulse rounded-xl bg-stone-200/80" />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
@@ -478,7 +660,7 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
             >
               <ArrowLeft className="h-4 w-4" />
             </button>
-            <img src="/logo.png" alt="" className="hidden h-7 w-7 shrink-0 object-contain sm:block" />
+            <img src="/logo.svg" alt="" className="hidden h-7 w-7 shrink-0 object-contain sm:block" />
             <div>
               <h1 className="text-lg font-bold">Manage: {data.gallery.title}</h1>
               <p className="text-xs text-slate-500">
@@ -508,8 +690,24 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
               className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-3.5 text-xs font-semibold hover:bg-stone-100"
             >
               {copiedShare ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-              <span>{copiedShare ? 'Copied Link' : 'Copy Share Link'}</span>
+              <span>{copiedShare ? 'Copied Share' : 'Copy Share Link'}</span>
             </button>
+            {sessionManageToken && (
+              <button
+                type="button"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(
+                    `${window.location.origin}/g/${slug}/manage#${sessionManageToken}`
+                  );
+                  setCopiedManage(true);
+                  setTimeout(() => setCopiedManage(false), 2000);
+                }}
+                className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-3.5 text-xs font-semibold hover:bg-stone-100"
+              >
+                {copiedManage ? <Check className="h-3.5 w-3.5" /> : <KeyRound className="h-3.5 w-3.5" />}
+                <span>{copiedManage ? 'Copied Manage' : 'Copy Manage Link'}</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => onNavigate(`/g/${slug}`)}
@@ -523,6 +721,80 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
       </header>
 
       <main className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6">
+        {justCreated && (
+          <div className="rounded-2xl border border-emerald-300/80 bg-emerald-50/90 p-5 text-emerald-950 shadow-2xs">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
+                <div>
+                  <h2 className="text-sm font-bold">
+                    Gallery Ready ({data.gallery.itemCount} items synced from Drive)
+                  </h2>
+                  <p className="mt-0.5 text-xs text-emerald-900/80">
+                    Customize your gallery colors, typography, layout, and privacy below. Because
+                    there are no logins, bookmark or copy your <strong>Secret Manage Link</strong>{' '}
+                    to return later.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-label="Dismiss new gallery banner"
+                onClick={() => setJustCreated(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-emerald-800/70 hover:bg-emerald-200/60 hover:text-emerald-950"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  aria-label="Client Share Link"
+                  value={`${window.location.origin}/g/${slug}`}
+                  className="uc-input flex-1 bg-white text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(`${window.location.origin}/g/${slug}`);
+                    setCopiedShare(true);
+                    setTimeout(() => setCopiedShare(false), 2000);
+                  }}
+                  className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border border-emerald-300 bg-white px-3 text-xs font-semibold text-emerald-900 hover:bg-emerald-100"
+                >
+                  {copiedShare ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  <span>{copiedShare ? 'Copied' : 'Copy Share'}</span>
+                </button>
+              </div>
+              {sessionManageToken && (
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    aria-label="Secret Manage Link"
+                    value={`${window.location.origin}/g/${slug}/manage#${sessionManageToken}`}
+                    className="uc-input flex-1 bg-white text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(
+                        `${window.location.origin}/g/${slug}/manage#${sessionManageToken}`
+                      );
+                      setCopiedManage(true);
+                      setTimeout(() => setCopiedManage(false), 2000);
+                    }}
+                    className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border border-emerald-300 bg-white px-3 text-xs font-semibold text-emerald-900 hover:bg-emerald-100"
+                  >
+                    {copiedManage ? <Check className="h-3.5 w-3.5" /> : <KeyRound className="h-3.5 w-3.5" />}
+                    <span>{copiedManage ? 'Copied' : 'Copy Manage'}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {toast && (
           <div
             role="status"
@@ -679,11 +951,36 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
                   />
 
                   <GalleryStyleControls
-                    values={{ theme, fontPreset, accentColor, gridGap, cardRadius }}
+                    values={{
+                      theme,
+                      fontPreset,
+                      accentColor,
+                      backgroundColor,
+                      surfaceColor,
+                      textColor,
+                      heroStyle,
+                      cardStyle,
+                      captionMode,
+                      gridGap,
+                      cardRadius
+                    }}
+                    onApplyPalette={(palette: GalleryPalettePreset) => {
+                      setTheme(palette.theme);
+                      setBackgroundColor(palette.backgroundColor);
+                      setSurfaceColor(palette.surfaceColor);
+                      setTextColor(palette.textColor);
+                      setAccentColor(palette.accentColor);
+                    }}
                     onChange={(key: keyof GalleryStyleValues, val) => {
                       if (key === 'theme') setTheme(val as GalleryTheme);
                       else if (key === 'fontPreset') setFontPreset(val as GalleryFontPreset);
                       else if (key === 'accentColor') setAccentColor(val as string);
+                      else if (key === 'backgroundColor') setBackgroundColor(val as string);
+                      else if (key === 'surfaceColor') setSurfaceColor(val as string);
+                      else if (key === 'textColor') setTextColor(val as string);
+                      else if (key === 'heroStyle') setHeroStyle(val as GalleryHeroStyle);
+                      else if (key === 'cardStyle') setCardStyle(val as GalleryCardStyle);
+                      else if (key === 'captionMode') setCaptionMode(val as GalleryCaptionMode);
                       else if (key === 'gridGap') setGridGap(val as GalleryGridGap);
                       else if (key === 'cardRadius') setCardRadius(val as GalleryCardRadius);
                     }}
@@ -724,10 +1021,12 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
                     <input
                       id="m-pass"
                       type="password"
+                      minLength={6}
+                      maxLength={128}
                       value={newPassword}
                       disabled={clearPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Leave blank to keep current"
+                      placeholder="6–128 chars (leave blank to keep)"
                       className="uc-input"
                     />
                     {data.gallery.hasPassword && (
@@ -738,6 +1037,33 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
                         onChange={setClearPassword}
                       />
                     )}
+                  </div>
+
+                  <div className="border-t border-stone-200/80 pt-4">
+                    <CustomSelect
+                      id="m-expiry"
+                      label="Auto-Expire Link"
+                      value={expiryAction}
+                      options={manageExpiryOptions}
+                      onChange={setExpiryAction}
+                    />
+                  </div>
+
+                  <div className="rounded-xl border border-stone-200 bg-stone-50/70 p-4">
+                    <p className="text-xs font-semibold text-slate-900">Secret Manage Link</p>
+                    <p className="mt-0.5 text-xs text-slate-600">
+                      Generate a new Secret Manage Link if you shared or lost the previous one.
+                      Older links and sessions will stop working immediately.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={rotatingToken}
+                      onClick={handleRotateManageLink}
+                      className="mt-3 inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-3.5 text-xs font-semibold text-slate-800 transition hover:bg-stone-100 disabled:opacity-50"
+                    >
+                      <KeyRound className="h-3.5 w-3.5" />
+                      <span>{rotatingToken ? 'Rotating...' : 'Rotate Manage Link'}</span>
+                    </button>
                   </div>
 
                   <div className="rounded-xl border border-red-200/80 bg-red-50/40 p-4">
@@ -785,12 +1111,18 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
         {previewGallery && (
           <section
             aria-label="Live gallery preview"
-            className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xs xl:sticky xl:top-6 xl:col-span-7"
+            className={
+              previewFullscreen
+                ? 'fixed inset-0 z-50 flex flex-col bg-stone-100'
+                : 'overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xs xl:sticky xl:top-6 xl:col-span-7'
+            }
           >
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 bg-stone-100/80 px-4 py-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 bg-stone-100/95 px-4 py-2.5 backdrop-blur-md">
               <div className="flex items-center gap-2">
                 <Eye className="h-4 w-4 text-slate-700" />
-                <span className="text-xs font-semibold text-slate-800">Live Preview</span>
+                <span className="text-xs font-semibold text-slate-800">
+                  {previewFullscreen ? 'Full-Screen Live Preview' : 'Live Preview'}
+                </span>
                 <span className="hidden text-xs text-slate-500 sm:inline">
                   · /g/{slug}
                 </span>
@@ -861,10 +1193,46 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
                     <Smartphone className="h-3.5 w-3.5" />
                   </button>
                 </div>
+
+                {previewFullscreen && hasUnsavedChanges && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void handleSave()}
+                    className="inline-flex min-h-[32px] items-center gap-1.5 rounded-lg bg-slate-900 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+                  >
+                    <Save className="h-3.5 w-3.5" />
+                    <span>{saving ? 'Saving...' : 'Save'}</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  aria-label={previewFullscreen ? 'Exit full screen preview' : 'Expand preview full screen'}
+                  title={previewFullscreen ? 'Exit full screen (Esc)' : 'Full screen preview'}
+                  onClick={() => setPreviewFullscreen((v) => !v)}
+                  className="inline-flex min-h-[32px] items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2.5 text-xs font-medium text-slate-700 hover:bg-stone-100"
+                >
+                  {previewFullscreen ? (
+                    <>
+                      <Minimize2 className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Exit Full Screen</span>
+                    </>
+                  ) : (
+                    <>
+                      <Maximize2 className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Full Screen</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
 
-            <div className="max-h-[78vh] overflow-y-auto bg-stone-200/60">
+            <div
+              className={`overflow-y-auto bg-stone-200/60 ${
+                previewFullscreen ? 'flex-1' : 'max-h-[78vh]'
+              }`}
+            >
               <div
                 className={
                   previewViewport === 'mobile'
@@ -916,7 +1284,25 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
               </p>
             </div>
             {likedItems.length > 0 && (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(
+                      likedItems.map((item) => item.name).join(', ')
+                    );
+                    setCopiedLightroom(true);
+                    setTimeout(() => setCopiedLightroom(false), 2000);
+                  }}
+                  className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-stone-300 px-3 text-xs font-medium hover:bg-stone-100"
+                >
+                  {copiedLightroom ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                  <span>{copiedLightroom ? 'Copied Filenames' : 'Copy for Lightroom'}</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => exportFavorites('txt')}

@@ -8,6 +8,23 @@ export interface ZipProgress {
   currentFile: string;
 }
 
+function sanitizeZipSegment(segment: string): string {
+  return segment
+    .replace(/[\u0000-\u001F\u007F]/g, '')
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .trim();
+}
+
+function buildSafeZipPath(folderPath: string, filename: string): string {
+  const safeSegments = folderPath
+    .split(/[/\\]+/)
+    .map(sanitizeZipSegment)
+    .filter((seg) => seg && seg !== '.' && seg !== '..');
+  const safeName = sanitizeZipSegment(filename) || 'file';
+  const safeLeaf = safeName === '.' || safeName === '..' ? 'file' : safeName;
+  return safeSegments.length > 0 ? `${safeSegments.join('/')}/${safeLeaf}` : safeLeaf;
+}
+
 function deduplicateEntryPath(rawPath: string, seen: Set<string>): string {
   if (!seen.has(rawPath)) {
     seen.add(rawPath);
@@ -46,7 +63,7 @@ export async function downloadItemsAsZip(
       while (inFlight.size < concurrency && nextIndex < items.length) {
         const idx = nextIndex++;
         const item = items[idx];
-        const rawPath = item.folderPath ? `${item.folderPath}/${item.name}` : item.name;
+        const rawPath = buildSafeZipPath(item.folderPath || '', item.name);
         const entryPath = deduplicateEntryPath(rawPath, seenPaths);
 
         const task = fetch(mediaFullUrl(slug, item.id, true), { signal }).then((res) => {

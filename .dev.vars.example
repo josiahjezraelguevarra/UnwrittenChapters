@@ -4,4 +4,6 @@ COOKIE_SIGNING_SECRET=change_this_to_a_long_random_hex_string_at_least_32_chars
 TURNSTILE_SECRET_KEY=
 ADMIN_MODERATION_KEY=change_this_to_an_operator_moderation_key
 PUBLIC_DONATE_URL=
+PUBLIC_FEEDBACK_FORM_URL=
+PUBLIC_REPORT_FORM_URL=
 PUBLIC_TURNSTILE_SITE_KEY=

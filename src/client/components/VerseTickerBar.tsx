@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BookOpen, Shuffle } from 'lucide-react';
+import { hexToRgba } from '../../shared/customization';
 import { fetchRandomBibleVerse, type BibleVerseResponse } from '../lib/api';
 
 const CLIENT_FALLBACK_VERSES: ReadonlyArray<BibleVerseResponse> = [
@@ -35,9 +36,14 @@ function getRandomClientFallback(excludeRef?: string): BibleVerseResponse {
 
 interface VerseTickerBarProps {
   dark?: boolean;
+  customColors?: {
+    bg: string;
+    fg: string;
+    border: string;
+  };
 }
 
-export function VerseTickerBar({ dark = false }: VerseTickerBarProps) {
+export function VerseTickerBar({ dark = false, customColors }: VerseTickerBarProps) {
   const [verse, setVerse] = useState<BibleVerseResponse | null>(null);
   const [verseSeq, setVerseSeq] = useState(0);
   const [shuffling, setShuffling] = useState(false);
@@ -114,18 +120,40 @@ export function VerseTickerBar({ dark = false }: VerseTickerBarProps) {
     <section
       aria-label="Scrolling ESV Bible verses"
       className={`fixed inset-x-0 bottom-0 z-30 border-t backdrop-blur-md transition-colors ${
-        dark
-          ? 'border-[#f4f1ea]/12 bg-[#161512]/94 text-[#f4f1ea]'
-          : 'border-[#141311]/12 bg-[#f3efe7]/94 text-[#141311]'
+        customColors
+          ? ''
+          : dark
+            ? 'border-[#f4f1ea]/12 bg-[#161512]/94 text-[#f4f1ea]'
+            : 'border-[#141311]/12 bg-[#f3efe7]/94 text-[#141311]'
       }`}
+      style={
+        customColors
+          ? {
+              backgroundColor: hexToRgba(customColors.bg, 0.94),
+              color: customColors.fg,
+              borderColor: customColors.border
+            }
+          : undefined
+      }
     >
       <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-2 sm:gap-3 sm:px-6">
         <div
-          className={`uc-font-mono inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-medium tracking-[0.14em] uppercase ${
-            dark
-              ? 'border-[#f4f1ea]/18 bg-[#12110f] text-[#f4f1ea]/80'
-              : 'border-[#141311]/14 bg-[#f8f6f2] text-[#141311]/75'
+          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+            customColors
+              ? ''
+              : dark
+                ? 'border-[#f4f1ea]/18 bg-[#12110f] text-[#f4f1ea]/80'
+                : 'border-[#141311]/14 bg-[#f8f6f2] text-[#141311]/75'
           }`}
+          style={
+            customColors
+              ? {
+                  borderColor: customColors.border,
+                  backgroundColor: hexToRgba(customColors.fg, 0.06),
+                  color: hexToRgba(customColors.fg, 0.8)
+                }
+              : undefined
+          }
         >
           <BookOpen className="h-3 w-3 opacity-70" />
           <span>ESV</span>
@@ -134,15 +162,21 @@ export function VerseTickerBar({ dark = false }: VerseTickerBarProps) {
         <div className="uc-verse-marquee-container relative min-w-0 flex-1 overflow-hidden">
           <div
             aria-hidden="true"
-            className={`pointer-events-none absolute inset-y-0 left-0 z-10 w-6 bg-gradient-to-r ${
-              dark ? 'from-[#161512] to-transparent' : 'from-[#f3efe7] to-transparent'
-            }`}
+            className="pointer-events-none absolute inset-y-0 left-0 z-10 w-6"
+            style={{
+              background: `linear-gradient(to right, ${
+                customColors ? customColors.bg : dark ? '#161512' : '#f3efe7'
+              }, transparent)`
+            }}
           />
           <div
             aria-hidden="true"
-            className={`pointer-events-none absolute inset-y-0 right-0 z-10 w-6 bg-gradient-to-l ${
-              dark ? 'from-[#161512] to-transparent' : 'from-[#f3efe7] to-transparent'
-            }`}
+            className="pointer-events-none absolute inset-y-0 right-0 z-10 w-6"
+            style={{
+              background: `linear-gradient(to left, ${
+                customColors ? customColors.bg : dark ? '#161512' : '#f3efe7'
+              }, transparent)`
+            }}
           />
 
           {verse ? (
@@ -163,8 +197,8 @@ export function VerseTickerBar({ dark = false }: VerseTickerBarProps) {
                       aria-hidden={copyIndex > 0 ? true : undefined}
                       className="inline-flex shrink-0 items-baseline gap-2.5 text-xs whitespace-nowrap sm:text-[13px]"
                     >
-                      <span className="uc-font-serif italic opacity-85">“{verse.text}”</span>
-                      <span className="uc-font-mono text-[10px] tracking-[0.12em] uppercase opacity-55">
+                      <span className="text-[13px] opacity-90">“{verse.text}”</span>
+                      <span className="text-xs opacity-60">
                         — {verse.reference} ({verse.translation})
                       </span>
                       <span aria-hidden="true" className="ml-4 opacity-25">
@@ -177,7 +211,7 @@ export function VerseTickerBar({ dark = false }: VerseTickerBarProps) {
             </div>
           ) : (
             <div className="flex items-center py-0.5 text-xs opacity-55">
-              <span className="uc-font-serif italic">Loading ESV Scripture...</span>
+              <span className="opacity-75">Loading ESV Scripture...</span>
             </div>
           )}
         </div>
@@ -189,10 +223,20 @@ export function VerseTickerBar({ dark = false }: VerseTickerBarProps) {
           aria-label="Shuffle ESV verse"
           title="Load random ESV verse"
           className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition disabled:opacity-50 ${
-            dark
-              ? 'border-[#f4f1ea]/15 text-[#f4f1ea]/70 hover:bg-[#f4f1ea]/10 hover:text-[#f4f1ea]'
-              : 'border-[#141311]/12 text-[#141311]/65 hover:bg-[#141311]/5 hover:text-[#141311]'
+            customColors
+              ? 'hover:opacity-100'
+              : dark
+                ? 'border-[#f4f1ea]/15 text-[#f4f1ea]/70 hover:bg-[#f4f1ea]/10 hover:text-[#f4f1ea]'
+                : 'border-[#141311]/12 text-[#141311]/65 hover:bg-[#141311]/5 hover:text-[#141311]'
           }`}
+          style={
+            customColors
+              ? {
+                  borderColor: customColors.border,
+                  color: hexToRgba(customColors.fg, 0.72)
+                }
+              : undefined
+          }
         >
           <Shuffle className={`h-3 w-3 ${shuffling ? 'animate-spin' : ''}`} />
         </button>

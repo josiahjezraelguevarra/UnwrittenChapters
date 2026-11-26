@@ -1,0 +1,21 @@
+{
+  "name": "UnwrittenChapters — Client Photo Galleries",
+  "short_name": "UnwrittenChapters",
+  "description": "Turn any public Google Drive folder into a clean, shareable client photo and video gallery.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f6f2",
+  "theme_color": "#141311",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

@@ -22,8 +22,7 @@ import type {
 } from '../../shared/types';
 import {
   FONT_PRESETS,
-  getContrastTextColor,
-  sanitizeHexColor
+  resolveGalleryThemeTokens
 } from '../../shared/customization';
 import { SUPPORT_EMAIL, buildSupportMailto } from '../../shared/contact';
 import { CustomSelect } from '../components/CustomSelect';
@@ -39,6 +38,7 @@ import {
   toggleLike,
   unlockGallery
 } from '../lib/api';
+import { usePageSeo } from '../lib/seo';
 import { downloadItemsAsZip, type ZipProgress } from '../lib/zipDownload';
 
 interface GalleryPageProps {
@@ -50,6 +50,17 @@ interface GalleryPageProps {
 
 export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryPageProps) {
   const [data, setData] = useState<GalleryViewResponse | null>(null);
+
+  usePageSeo({
+    title: data?.gallery.title
+      ? `${data.gallery.title} — ${config.appName}`
+      : `Client Gallery — ${config.appName}`,
+    description:
+      data?.gallery.description ||
+      `Private client photo and video gallery shared on ${config.appName}.`,
+    robots: 'noindex, nofollow',
+    canonicalPath: null
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
 
@@ -131,12 +142,10 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
   }, [data, selectedFolderPath, mediaFilter, visitorLikes]);
 
   const layout = layoutOverride || data?.gallery.layout || 'masonry';
-  const isDark = data?.gallery.theme === 'dark';
   const fontMeta = FONT_PRESETS[data?.gallery.fontPreset || 'sans'];
-  const accentHex = sanitizeHexColor(data?.gallery.accentColor);
-  const accentFg = accentHex ? getContrastTextColor(accentHex) : '';
-  const activeAccentStyle = accentHex
-    ? { backgroundColor: accentHex, color: accentFg, borderColor: accentHex }
+  const tokens = data ? resolveGalleryThemeTokens(data.gallery) : null;
+  const activeAccentStyle = tokens
+    ? { backgroundColor: tokens.accent, color: tokens.accentFg, borderColor: tokens.accent }
     : undefined;
 
   // Initialize PhotoSwipe lightbox for photo items in the current view
@@ -145,8 +154,29 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
 
     const lightbox = new PhotoSwipeLightbox({
       gallery: gridRef.current,
-      children: 'a[data-pswp-photo="true"]',
+      children: 'button[data-pswp-photo="true"]',
       pswpModule: () => import('photoswipe')
+    });
+
+    lightbox.addFilter('domItemData', (itemData, element) => {
+      const src = element.dataset.pswpSrc;
+      if (src) itemData.src = src;
+      const w = Number(element.dataset.pswpWidth || '0');
+      const h = Number(element.dataset.pswpHeight || '0');
+      if (w > 0) {
+        itemData.width = w;
+        itemData.w = w;
+      }
+      if (h > 0) {
+        itemData.height = h;
+        itemData.h = h;
+      }
+      const thumbEl = element.querySelector('img');
+      if (thumbEl) {
+        itemData.msrc = thumbEl.currentSrc || thumbEl.src;
+        itemData.alt = thumbEl.getAttribute('alt') || '';
+      }
+      return itemData;
     });
 
     if (data.gallery.allowDownload) {
@@ -265,14 +295,77 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
   };
 
   if (loading) {
+    const skeletonAspects = [
+      'aspect-[3/4]',
+      'aspect-[4/3]',
+      'aspect-[4/5]',
+      'aspect-square',
+      'aspect-[3/4]',
+      'aspect-[4/3]',
+      'aspect-[3/4]',
+      'aspect-[4/5]',
+      'aspect-[4/3]',
+      'aspect-square'
+    ];
+
     return (
-      <div className="min-h-screen bg-stone-50 p-6">
-        <div className="mx-auto max-w-6xl space-y-6">
-          <div className="h-56 animate-pulse rounded-2xl bg-stone-200" />
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="aspect-[4/3] animate-pulse rounded-xl bg-stone-200" />
+      <div className="min-h-screen w-full bg-stone-50 pb-12">
+        {/* Hero Skeleton */}
+        <header className="border-b border-stone-200 bg-stone-100/70">
+          <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5">
+                <div className="h-6 w-6 animate-pulse rounded-md bg-stone-200" />
+                <div className="h-4 w-32 animate-pulse rounded bg-stone-200" />
+              </div>
+              <div className="h-9 w-24 animate-pulse rounded-full bg-stone-200" />
+            </div>
+
+            <div className="mt-5 h-10 w-3/4 max-w-md animate-pulse rounded-xl bg-stone-200 sm:h-12" />
+            <div className="mt-3 h-4 w-2/3 max-w-lg animate-pulse rounded bg-stone-200/80" />
+            <div className="mt-4 h-3.5 w-44 animate-pulse rounded bg-stone-200/80" />
+          </div>
+        </header>
+
+        {/* Sticky Toolbar Skeleton */}
+        <nav
+          aria-hidden="true"
+          className="sticky top-0 z-20 border-b border-stone-200 bg-white/90 backdrop-blur-md"
+        >
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2.5 px-4 py-2.5 sm:px-6 sm:py-3">
+            <div className="flex items-center gap-2">
+              <div className="h-9 w-20 animate-pulse rounded-full bg-stone-200" />
+              <div className="h-9 w-24 animate-pulse rounded-full bg-stone-200/80" />
+              <div className="h-9 w-24 animate-pulse rounded-full bg-stone-200/80" />
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-9 w-28 animate-pulse rounded-lg bg-stone-200/80" />
+              <div className="h-9 w-36 animate-pulse rounded-xl bg-stone-200" />
+            </div>
+          </div>
+        </nav>
+
+        {/* Full-Width Masonry Grid Skeleton */}
+        <main className="w-full px-4 py-6">
+          <div className="masonry-columns">
+            {skeletonAspects.map((aspect, i) => (
+              <div
+                key={i}
+                className={`masonry-item w-full animate-pulse rounded-xl bg-stone-200/85 ${aspect}`}
+              />
             ))}
+          </div>
+        </main>
+
+        {/* Bottom Verse Ticker Skeleton */}
+        <div
+          aria-hidden="true"
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-stone-200 bg-[#f3efe7]/95"
+        >
+          <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2.5 sm:px-6">
+            <div className="h-5 w-14 animate-pulse rounded-full bg-stone-300/70" />
+            <div className="h-3.5 flex-1 animate-pulse rounded bg-stone-300/60" />
+            <div className="h-7 w-7 animate-pulse rounded-full bg-stone-300/70" />
           </div>
         </div>
       </div>
@@ -323,27 +416,30 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
     );
   }
 
-  if (data.locked) {
+  if (data.locked && tokens) {
     return (
       <main
-        className={`flex min-h-screen flex-col items-center justify-center px-4 ${
-          isDark ? 'bg-slate-950 text-slate-100' : 'bg-stone-50 text-slate-900'
-        }`}
-        style={{ fontFamily: fontMeta.bodyFamily }}
+        className="flex min-h-screen flex-col items-center justify-center px-4 transition-colors"
+        style={{
+          backgroundColor: tokens.bg,
+          color: tokens.fg,
+          fontFamily: fontMeta.bodyFamily
+        }}
       >
         <div
-          className={`w-full max-w-md rounded-2xl border p-6 shadow-sm ${
-            isDark ? 'border-slate-800 bg-slate-900' : 'border-stone-200 bg-white'
-          }`}
+          className="w-full max-w-md rounded-2xl border p-6 shadow-sm"
+          style={{
+            borderColor: tokens.border,
+            backgroundColor: tokens.surface
+          }}
         >
           <div className="flex items-center gap-3">
             <span
-              className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500"
-              style={
-                accentHex
-                  ? { backgroundColor: `${accentHex}1a`, color: accentHex }
-                  : undefined
-              }
+              className="flex h-11 w-11 items-center justify-center rounded-xl"
+              style={{
+                backgroundColor: tokens.accentSoftBg,
+                color: tokens.accent
+              }}
             >
               <Lock className="h-5 w-5" />
             </span>
@@ -351,7 +447,7 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
               <h1 className="text-lg font-bold" style={{ fontFamily: fontMeta.headingFamily }}>
                 {data.gallery.title}
               </h1>
-              <p className="text-xs opacity-70">
+              <p className="text-xs" style={{ color: tokens.mutedFg }}>
                 {data.gallery.brandName ? `By ${data.gallery.brandName} · ` : ''}
                 Password required
               </p>
@@ -370,11 +466,12 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
               value={passwordInput}
               onChange={(e) => setPasswordInput(e.target.value)}
               placeholder="Password"
-              className={`min-h-[44px] w-full rounded-xl border px-3.5 text-sm ${
-                isDark
-                  ? 'border-slate-700 bg-slate-800 text-white'
-                  : 'border-stone-300 bg-white text-slate-900'
-              }`}
+              className="min-h-[44px] w-full rounded-xl border px-3.5 text-sm focus:outline-none"
+              style={{
+                borderColor: tokens.border,
+                backgroundColor: tokens.bg,
+                color: tokens.fg
+              }}
             />
             {unlockError && (
               <p role="alert" className="text-sm text-red-500">
@@ -384,7 +481,7 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
             <button
               type="submit"
               disabled={unlocking}
-              className="min-h-[44px] w-full rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50 dark:bg-white dark:text-slate-900"
+              className="min-h-[44px] w-full rounded-xl px-4 text-sm font-semibold transition hover:opacity-90 disabled:opacity-50"
               style={activeAccentStyle}
             >
               {unlocking ? 'Unlocking...' : 'Open Gallery'}
@@ -425,6 +522,8 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
           setReportOpen(true);
         }}
         onNavigateHome={() => onNavigate('/')}
+        feedbackFormUrl={config.feedbackFormUrl}
+        reportFormUrl={config.reportFormUrl}
       />
 
       {/* HD Video Player Dialog */}

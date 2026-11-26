@@ -1,42 +1,128 @@
 import { Hono, type Context } from 'hono';
-import { getCookie, setCookie } from 'hono/cookie';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type {
-  GalleryFolder,
   GalleryLayout,
   GalleryTheme,
-  MediaItem,
   PublicGalleryConfig
 } from '../../shared/types';
 import {
+  assignOpaqueIds,
+  resolveDriveFileId,
+  toPublicFileId,
+  toPublicFolders,
+  toPublicItems
+} from '../opaqueIds';
+import type {
+  Env,
+  GalleryRow,
+  StoredGalleryFolder,
+  StoredMediaItem
+} from '../types';
+import {
   generateSlug,
+  getAdminTokenVersion,
   getPasswordVersion,
   hashPassword,
   randomToken,
   sanitizeCustomSlug,
   sha256Hex,
+  signAdminSessionToken,
   signUnlockToken,
   timingSafeEqual,
+  verifyAdminSessionToken,
   verifyPassword,
   verifyTurnstile,
   verifyUnlockToken
 } from '../crypto';
 import {
   sanitizeHexColor,
+  validateCaptionMode,
   validateCardRadius,
+  validateCardStyle,
   validateFontPreset,
-  validateGridGap
+  validateGridGap,
+  validateHeroStyle
 } from '../../shared/customization';
-import { SUPPORT_EMAIL } from '../../shared/contact';
+import {
+  FEEDBACK_FORM_URL,
+  REPORT_FORM_URL,
+  SUPPORT_EMAIL
+} from '../../shared/contact';
 import { DriveError, extractDriveFolderId, fetchDriveFolderTree } from '../drive';
+import {
+  isValidDriveId,
+  isValidSlugParam,
+  isValidVisitorId,
+  readBoundedJsonObject,
+  sanitizeControlChars
+} from '../security';
 import {
   checkRateLimit,
   getGalleryBySlug,
   invalidateGalleryCache,
   saveManifestCache
 } from '../storage';
-import type { Env, GalleryRow } from '../types';
 
 export const galleriesRouter = new Hono<{ Bindings: Env }>();
+
+const PASSWORD_MIN_LENGTH = 6;
+const PASSWORD_MAX_LENGTH = 128;
+const ADMIN_COOKIE_TTL_SECONDS = 60 * 60 * 24 * 30;
+
+const ALLOWED_CREATE_KEYS = new Set([
+  'driveUrl',
+  'title',
+  'description',
+  'brandName',
+  'brandUrl',
+  'customSlug',
+  'layout',
+  'theme',
+  'fontPreset',
+  'accentColor',
+  'backgroundColor',
+  'surfaceColor',
+  'textColor',
+  'heroStyle',
+  'cardStyle',
+  'captionMode',
+  'gridGap',
+  'cardRadius',
+  'password',
+  'expiresInDays',
+  'allowDownload',
+  'allowLikes',
+  'turnstileToken'
+]);
+
+const ALLOWED_UNLOCK_KEYS = new Set(['password']);
+const ALLOWED_LIKE_KEYS = new Set(['fileId', 'visitorId']);
+const ALLOWED_SESSION_KEYS = new Set(['token']);
+const ALLOWED_REPORT_KEYS = new Set(['reason', 'details', 'turnstileToken']);
+const ALLOWED_PATCH_KEYS = new Set([
+  'title',
+  'description',
+  'brandName',
+  'brandUrl',
+  'layout',
+  'theme',
+  'fontPreset',
+  'accentColor',
+  'backgroundColor',
+  'surfaceColor',
+  'textColor',
+  'heroStyle',
+  'cardStyle',
+  'captionMode',
+  'gridGap',
+  'cardRadius',
+  'coverFileId',
+  'allowDownload',
+  'allowLikes',
+  'password',
+  'clearPassword',
+  'expiresInDays'
+]);
 
 export function getSigningSecret(env: Env): string {
   const secret = env.COOKIE_SIGNING_SECRET?.trim();
@@ -48,6 +134,10 @@ export function getSigningSecret(env: Env): string {
 
 export function unlockCookieName(slug: string): string {
   return `uc_unlock_${slug}`;
+}
+
+export function adminCookieName(slug: string): string {
+  return `uc_admin_${slug}`;
 }
 
 async function setUnlockCookieForSlug(
@@ -62,8 +152,39 @@ async function setUnlockCookieForSlug(
     httpOnly: true,
     sameSite: 'Lax',
     secure: isHttps,
-    path: '/',
+    path: '/api',
     maxAge: 60 * 60 * 24 * 7
+  });
+}
+
+async function setAdminCookieForSlug(
+  c: Context<{ Bindings: Env }>,
+  slug: string,
+  adminTokenHash: string
+): Promise<void> {
+  const version = await getAdminTokenVersion(adminTokenHash);
+  const token = await signAdminSessionToken(
+    slug,
+    getSigningSecret(c.env),
+    version,
+    ADMIN_COOKIE_TTL_SECONDS
+  );
+  const isHttps = c.req.url.startsWith('https://');
+  setCookie(c, adminCookieName(slug), token, {
+    httpOnly: true,
+    sameSite: 'Lax',
+    secure: isHttps,
+    path: '/api/galleries',
+    maxAge: ADMIN_COOKIE_TTL_SECONDS
+  });
+}
+
+function clearAdminCookieForSlug(c: Context<{ Bindings: Env }>, slug: string): void {
+  const isHttps = c.req.url.startsWith('https://');
+  deleteCookie(c, adminCookieName(slug), {
+    path: '/api/galleries',
+    secure: isHttps,
+    sameSite: 'Lax'
   });
 }
 
@@ -99,17 +220,27 @@ function computeExpiryTimestamp(days: unknown): number | null {
   return Date.now() + clamped * 24 * 60 * 60 * 1000;
 }
 
-function toPublicConfig(row: GalleryRow): PublicGalleryConfig {
+function toPublicConfig(
+  row: GalleryRow,
+  storedItems?: StoredMediaItem[]
+): PublicGalleryConfig {
+  const items = storedItems ?? (JSON.parse(row.items_json) as StoredMediaItem[]);
   return {
     id: row.id,
     slug: row.slug,
     title: row.title,
     description: row.description,
-    coverFileId: row.cover_file_id,
+    coverFileId: toPublicFileId(items, row.cover_file_id),
     layout: row.layout,
     theme: row.theme,
     fontPreset: validateFontPreset(row.font_preset),
     accentColor: sanitizeHexColor(row.accent_color),
+    backgroundColor: sanitizeHexColor(row.background_color),
+    surfaceColor: sanitizeHexColor(row.surface_color),
+    textColor: sanitizeHexColor(row.text_color),
+    heroStyle: validateHeroStyle(row.hero_style),
+    cardStyle: validateCardStyle(row.card_style),
+    captionMode: validateCaptionMode(row.caption_mode),
     gridGap: validateGridGap(row.grid_gap),
     cardRadius: validateCardRadius(row.card_radius),
     brandName: row.brand_name,
@@ -142,34 +273,71 @@ function runWaitUntil(
 }
 
 async function requireGalleryAdmin(
-  db: D1Database,
-  slug: string,
-  authHeader: string | undefined
-): Promise<GalleryRow | null> {
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-  const token = authHeader.slice(7).trim();
-  if (!token) return null;
+  c: Context<{ Bindings: Env }>,
+  slug: string
+): Promise<{ row: GalleryRow | null; rateLimited: boolean }> {
+  if (!isValidSlugParam(slug)) {
+    return { row: null, rateLimited: false };
+  }
 
-  const row = await getGalleryBySlug(db, slug);
-  if (!row) return null;
+  const ip = getClientIp(c);
+  const allowed = await checkRateLimit(c.env.CACHE, `rl:admin:${slug}:${ip}`, 60, 900);
+  if (!allowed) {
+    return { row: null, rateLimited: true };
+  }
 
-  const tokenHash = await sha256Hex(token);
-  if (!timingSafeEqual(tokenHash, row.admin_token_hash)) return null;
-  return row;
+  const row = await getGalleryBySlug(c.env.DB, slug);
+  if (!row) return { row: null, rateLimited: false };
+
+  const authHeader = c.req.header('authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7).trim();
+    if (token) {
+      const tokenHash = await sha256Hex(token);
+      if (await timingSafeEqual(tokenHash, row.admin_token_hash)) {
+        return { row, rateLimited: false };
+      }
+    }
+    return { row: null, rateLimited: false };
+  }
+
+  const sessionCookie = getCookie(c, adminCookieName(slug));
+  if (sessionCookie) {
+    const version = await getAdminTokenVersion(row.admin_token_hash);
+    const validCookie = await verifyAdminSessionToken(
+      sessionCookie,
+      slug,
+      getSigningSecret(c.env),
+      version
+    );
+    if (validCookie) {
+      return { row, rateLimited: false };
+    }
+  }
+
+  return { row: null, rateLimited: false };
 }
 
 galleriesRouter.get('/config', (c) => {
+  c.header('Cache-Control', 'public, max-age=300');
   return c.json({
     appName: c.env.PUBLIC_APP_NAME || 'UnwrittenChapters',
     donateUrl: c.env.PUBLIC_DONATE_URL || '',
+    feedbackFormUrl: c.env.PUBLIC_FEEDBACK_FORM_URL || FEEDBACK_FORM_URL,
+    reportFormUrl: c.env.PUBLIC_REPORT_FORM_URL || REPORT_FORM_URL,
     turnstileSiteKey: c.env.PUBLIC_TURNSTILE_SITE_KEY || '',
     turnstileRequired: Boolean(c.env.TURNSTILE_SECRET_KEY)
   });
 });
 
 galleriesRouter.post('/galleries', async (c) => {
-  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!body || typeof body.driveUrl !== 'string') {
+  c.header('Cache-Control', 'private, no-store');
+
+  const parsed = await readBoundedJsonObject(c, ALLOWED_CREATE_KEYS);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
+
+  if (typeof body.driveUrl !== 'string') {
     return c.json({ error: 'Please provide a Google Drive folder link.', code: 'INVALID_INPUT' }, 400);
   }
 
@@ -200,6 +368,17 @@ galleriesRouter.post('/galleries', async (c) => {
       {
         error: 'Invalid Google Drive folder link. Paste a URL like https://drive.google.com/drive/folders/...',
         code: 'INVALID_DRIVE_URL'
+      },
+      400
+    );
+  }
+
+  const rawPassword = typeof body.password === 'string' ? body.password.trim() : '';
+  if (rawPassword && (rawPassword.length < PASSWORD_MIN_LENGTH || rawPassword.length > PASSWORD_MAX_LENGTH)) {
+    return c.json(
+      {
+        error: `Gallery password must be between ${PASSWORD_MIN_LENGTH} and ${PASSWORD_MAX_LENGTH} characters.`,
+        code: 'INVALID_PASSWORD_POLICY'
       },
       400
     );
@@ -250,23 +429,27 @@ galleriesRouter.post('/galleries', async (c) => {
   const id = randomToken(12);
   const adminToken = randomToken(24);
   const adminTokenHash = await sha256Hex(adminToken);
-
-  const rawPassword = typeof body.password === 'string' ? body.password.trim() : '';
   const passwordHash = rawPassword ? await hashPassword(rawPassword) : null;
 
   const title =
-    typeof body.title === 'string' && body.title.trim()
-      ? body.title.trim().slice(0, 120)
-      : sync.folderName.slice(0, 120);
+    typeof body.title === 'string' && sanitizeControlChars(body.title, 120)
+      ? sanitizeControlChars(body.title, 120)
+      : sanitizeControlChars(sync.folderName, 120) || 'Untitled Gallery';
   const description =
-    typeof body.description === 'string' ? body.description.trim().slice(0, 500) : '';
+    typeof body.description === 'string' ? sanitizeControlChars(body.description, 500) : '';
   const brandName =
-    typeof body.brandName === 'string' ? body.brandName.trim().slice(0, 80) : '';
+    typeof body.brandName === 'string' ? sanitizeControlChars(body.brandName, 80) : '';
   const brandUrl = sanitizeHttpUrl(body.brandUrl);
   const layout = validateLayout(body.layout);
   const theme = validateTheme(body.theme);
   const fontPreset = validateFontPreset(body.fontPreset);
   const accentColor = sanitizeHexColor(body.accentColor);
+  const backgroundColor = sanitizeHexColor(body.backgroundColor);
+  const surfaceColor = sanitizeHexColor(body.surfaceColor);
+  const textColor = sanitizeHexColor(body.textColor);
+  const heroStyle = validateHeroStyle(body.heroStyle);
+  const cardStyle = validateCardStyle(body.cardStyle);
+  const captionMode = validateCaptionMode(body.captionMode);
   const gridGap = validateGridGap(body.gridGap);
   const cardRadius = validateCardRadius(body.cardRadius);
   const allowDownload = body.allowDownload === false ? 0 : 1;
@@ -274,6 +457,7 @@ galleriesRouter.post('/galleries', async (c) => {
   const expiresAt = computeExpiryTimestamp(body.expiresInDays);
   const now = Date.now();
   const coverFileId = sync.items[0]?.id ?? null;
+  const { storedItems, storedFolders } = assignOpaqueIds(sync.items, sync.folders);
 
   const row: GalleryRow = {
     id,
@@ -286,6 +470,12 @@ galleriesRouter.post('/galleries', async (c) => {
     theme,
     font_preset: fontPreset,
     accent_color: accentColor,
+    background_color: backgroundColor,
+    surface_color: surfaceColor,
+    text_color: textColor,
+    hero_style: heroStyle,
+    card_style: cardStyle,
+    caption_mode: captionMode,
     grid_gap: gridGap,
     card_radius: cardRadius,
     brand_name: brandName,
@@ -296,8 +486,8 @@ galleriesRouter.post('/galleries', async (c) => {
     allow_likes: allowLikes,
     expires_at: expiresAt,
     status: 'active',
-    items_json: JSON.stringify(sync.items),
-    folders_json: JSON.stringify(sync.folders),
+    items_json: JSON.stringify(storedItems),
+    folders_json: JSON.stringify(storedFolders),
     item_count: sync.items.length,
     view_count: 0,
     synced_at: now,
@@ -307,10 +497,11 @@ galleriesRouter.post('/galleries', async (c) => {
   await c.env.DB.prepare(
     `INSERT INTO galleries (
       id, slug, drive_folder_id, title, description, cover_file_id, layout, theme,
-      font_preset, accent_color, grid_gap, card_radius,
+      font_preset, accent_color, background_color, surface_color, text_color,
+      hero_style, card_style, caption_mode, grid_gap, card_radius,
       brand_name, brand_url, password_hash, admin_token_hash, allow_download, allow_likes,
       expires_at, status, items_json, folders_json, item_count, view_count, synced_at, created_at
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)`
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32)`
   )
     .bind(
       row.id,
@@ -323,6 +514,12 @@ galleriesRouter.post('/galleries', async (c) => {
       row.theme,
       row.font_preset,
       row.accent_color,
+      row.background_color,
+      row.surface_color,
+      row.text_color,
+      row.hero_style,
+      row.card_style,
+      row.caption_mode,
       row.grid_gap,
       row.card_radius,
       row.brand_name,
@@ -343,13 +540,17 @@ galleriesRouter.post('/galleries', async (c) => {
     .run();
 
   await saveManifestCache(c.env.CACHE, row);
+  await setAdminCookieForSlug(c, slug, adminTokenHash);
+  if (passwordHash) {
+    await setUnlockCookieForSlug(c, slug, passwordHash);
+  }
 
   return c.json(
     {
       slug,
       sharePath: `/g/${slug}`,
       managePath: `/g/${slug}/manage#${adminToken}`,
-      gallery: toPublicConfig(row),
+      gallery: toPublicConfig(row, storedItems),
       truncated: sync.truncated
     },
     201
@@ -357,7 +558,19 @@ galleriesRouter.post('/galleries', async (c) => {
 });
 
 galleriesRouter.get('/galleries/:slug', async (c) => {
+  c.header('Cache-Control', 'private, no-store');
+
   const slug = c.req.param('slug');
+  if (!isValidSlugParam(slug)) {
+    return c.json({ error: 'Gallery not found.', code: 'NOT_FOUND' }, 404);
+  }
+
+  const ip = getClientIp(c);
+  const viewAllowed = await checkRateLimit(c.env.CACHE, `rl:view:${ip}`, 180, 300);
+  if (!viewAllowed) {
+    return c.json({ error: 'Too many requests. Please slow down.', code: 'RATE_LIMITED' }, 429);
+  }
+
   const row = await getGalleryBySlug(c.env.DB, slug);
 
   if (!row) {
@@ -370,7 +583,9 @@ galleriesRouter.get('/galleries/:slug', async (c) => {
     return c.json({ error: 'This gallery link has expired.', code: 'EXPIRED' }, 410);
   }
 
-  const publicConfig = toPublicConfig(row);
+  const storedItems = JSON.parse(row.items_json) as StoredMediaItem[];
+  const storedFolders = JSON.parse(row.folders_json) as StoredGalleryFolder[];
+  const publicConfig = toPublicConfig(row, storedItems);
 
   if (row.password_hash) {
     const token = getCookie(c, unlockCookieName(slug));
@@ -388,9 +603,8 @@ galleriesRouter.get('/galleries/:slug', async (c) => {
     }
   }
 
-  const items = JSON.parse(row.items_json) as MediaItem[];
-  const folders = JSON.parse(row.folders_json) as GalleryFolder[];
-  const visitorId = (c.req.header('x-visitor-id') || '').trim().slice(0, 64);
+  const rawVisitorId = (c.req.header('x-visitor-id') || '').trim();
+  const visitorId = isValidVisitorId(rawVisitorId) ? rawVisitorId : '';
 
   const likeCounts: Record<string, number> = {};
   const visitorLikes: string[] = [];
@@ -403,7 +617,10 @@ galleriesRouter.get('/galleries/:slug', async (c) => {
       .all<{ drive_file_id: string; cnt: number }>();
 
     for (const r of countsRes.results) {
-      likeCounts[r.drive_file_id] = Number(r.cnt);
+      const publicId = toPublicFileId(storedItems, r.drive_file_id);
+      if (publicId) {
+        likeCounts[publicId] = Number(r.cnt);
+      }
     }
 
     if (visitorId) {
@@ -413,7 +630,10 @@ galleriesRouter.get('/galleries/:slug', async (c) => {
         .bind(row.id, visitorId)
         .all<{ drive_file_id: string }>();
       for (const r of mineRes.results) {
-        visitorLikes.push(r.drive_file_id);
+        const publicId = toPublicFileId(storedItems, r.drive_file_id);
+        if (publicId) {
+          visitorLikes.push(publicId);
+        }
       }
     }
   }
@@ -428,15 +648,21 @@ galleriesRouter.get('/galleries/:slug', async (c) => {
   return c.json({
     locked: false,
     gallery: publicConfig,
-    items,
-    folders,
+    items: toPublicItems(storedItems),
+    folders: toPublicFolders(storedFolders),
     likeCounts,
     visitorLikes
   });
 });
 
 galleriesRouter.post('/galleries/:slug/unlock', async (c) => {
+  c.header('Cache-Control', 'private, no-store');
+
   const slug = c.req.param('slug');
+  if (!isValidSlugParam(slug)) {
+    return c.json({ error: 'Gallery not found.' }, 404);
+  }
+
   const ip = getClientIp(c);
   const allowed = await checkRateLimit(c.env.CACHE, `rl:unlock:${slug}:${ip}`, 25, 900);
   if (!allowed) {
@@ -453,8 +679,13 @@ galleriesRouter.post('/galleries/:slug/unlock', async (c) => {
     return c.json({ unlocked: true });
   }
 
-  const body = (await c.req.json().catch(() => null)) as { password?: string } | null;
-  const password = typeof body?.password === 'string' ? body.password : '';
+  const parsed = await readBoundedJsonObject(c, ALLOWED_UNLOCK_KEYS, 4096);
+  if (!parsed.ok) return parsed.response;
+  const password = typeof parsed.data.password === 'string' ? parsed.data.password : '';
+  if (!password || password.length > PASSWORD_MAX_LENGTH) {
+    return c.json({ error: 'Incorrect gallery password.', code: 'INVALID_PASSWORD' }, 401);
+  }
+
   const ok = await verifyPassword(password, row.password_hash);
   if (!ok) {
     return c.json({ error: 'Incorrect gallery password.', code: 'INVALID_PASSWORD' }, 401);
@@ -466,7 +697,13 @@ galleriesRouter.post('/galleries/:slug/unlock', async (c) => {
 });
 
 galleriesRouter.post('/galleries/:slug/likes', async (c) => {
+  c.header('Cache-Control', 'private, no-store');
+
   const slug = c.req.param('slug');
+  if (!isValidSlugParam(slug)) {
+    return c.json({ error: 'Gallery not found.' }, 404);
+  }
+
   const ip = getClientIp(c);
   const allowed = await checkRateLimit(c.env.CACHE, `rl:like:${slug}:${ip}`, 120, 60);
   if (!allowed) {
@@ -487,26 +724,26 @@ galleriesRouter.post('/galleries/:slug/likes', async (c) => {
     if (!valid) return c.json({ error: 'Gallery is locked.' }, 401);
   }
 
-  const body = (await c.req.json().catch(() => null)) as {
-    fileId?: string;
-    visitorId?: string;
-  } | null;
-  const fileId = typeof body?.fileId === 'string' ? body.fileId : '';
-  const visitorId = typeof body?.visitorId === 'string' ? body.visitorId.trim() : '';
+  const parsed = await readBoundedJsonObject(c, ALLOWED_LIKE_KEYS, 4096);
+  if (!parsed.ok) return parsed.response;
 
-  if (!fileId || !/^[a-zA-Z0-9_-]{8,64}$/.test(visitorId)) {
+  const fileId = typeof parsed.data.fileId === 'string' ? parsed.data.fileId : '';
+  const visitorId = typeof parsed.data.visitorId === 'string' ? parsed.data.visitorId.trim() : '';
+
+  if (!isValidDriveId(fileId) || !isValidVisitorId(visitorId)) {
     return c.json({ error: 'Invalid like request.' }, 400);
   }
 
-  const items = JSON.parse(row.items_json) as MediaItem[];
-  if (!items.some((item) => item.id === fileId)) {
+  const storedItems = JSON.parse(row.items_json) as StoredMediaItem[];
+  const driveFileId = resolveDriveFileId(storedItems, fileId);
+  if (!driveFileId) {
     return c.json({ error: 'Item not found in gallery.' }, 404);
   }
 
   const existing = await c.env.DB.prepare(
     'SELECT 1 FROM likes WHERE gallery_id = ?1 AND drive_file_id = ?2 AND visitor_id = ?3'
   )
-    .bind(row.id, fileId, visitorId)
+    .bind(row.id, driveFileId, visitorId)
     .first();
 
   let liked = false;
@@ -514,14 +751,14 @@ galleriesRouter.post('/galleries/:slug/likes', async (c) => {
     await c.env.DB.prepare(
       'DELETE FROM likes WHERE gallery_id = ?1 AND drive_file_id = ?2 AND visitor_id = ?3'
     )
-      .bind(row.id, fileId, visitorId)
+      .bind(row.id, driveFileId, visitorId)
       .run();
     liked = false;
   } else {
     await c.env.DB.prepare(
       'INSERT INTO likes (gallery_id, drive_file_id, visitor_id, created_at) VALUES (?1, ?2, ?3, ?4)'
     )
-      .bind(row.id, fileId, visitorId, Date.now())
+      .bind(row.id, driveFileId, visitorId, Date.now())
       .run();
     liked = true;
   }
@@ -529,7 +766,7 @@ galleriesRouter.post('/galleries/:slug/likes', async (c) => {
   const countRow = await c.env.DB.prepare(
     'SELECT COUNT(*) AS cnt FROM likes WHERE gallery_id = ?1 AND drive_file_id = ?2'
   )
-    .bind(row.id, fileId)
+    .bind(row.id, driveFileId)
     .first<{ cnt: number }>();
 
   return c.json({
@@ -538,16 +775,90 @@ galleriesRouter.post('/galleries/:slug/likes', async (c) => {
   });
 });
 
-galleriesRouter.get('/galleries/:slug/manage', async (c) => {
-  const row = await requireGalleryAdmin(
-    c.env.DB,
-    c.req.param('slug'),
-    c.req.header('authorization')
-  );
+galleriesRouter.post('/galleries/:slug/manage/session', async (c) => {
+  c.header('Cache-Control', 'private, no-store');
+
+  const slug = c.req.param('slug');
+  if (!isValidSlugParam(slug)) {
+    return c.json({ error: 'Invalid or missing manage token.' }, 401);
+  }
+
+  const ip = getClientIp(c);
+  const allowed = await checkRateLimit(c.env.CACHE, `rl:admin:${slug}:${ip}`, 25, 900);
+  if (!allowed) {
+    return c.json({ error: 'Too many authentication attempts. Please wait 15 minutes.', code: 'RATE_LIMITED' }, 429);
+  }
+
+  const parsed = await readBoundedJsonObject(c, ALLOWED_SESSION_KEYS, 4096);
+  if (!parsed.ok) return parsed.response;
+
+  const token = typeof parsed.data.token === 'string' ? parsed.data.token.trim() : '';
+  if (!token || token.length > 256) {
+    return c.json({ error: 'Invalid or missing manage token.' }, 401);
+  }
+
+  const row = await getGalleryBySlug(c.env.DB, slug);
   if (!row) return c.json({ error: 'Invalid or missing manage token.' }, 401);
 
-  const items = JSON.parse(row.items_json) as MediaItem[];
-  const folders = JSON.parse(row.folders_json) as GalleryFolder[];
+  const tokenHash = await sha256Hex(token);
+  if (!(await timingSafeEqual(tokenHash, row.admin_token_hash))) {
+    return c.json({ error: 'Invalid or missing manage token.' }, 401);
+  }
+
+  await setAdminCookieForSlug(c, slug, row.admin_token_hash);
+  if (row.password_hash) {
+    await setUnlockCookieForSlug(c, slug, row.password_hash);
+  }
+
+  return c.json({ authenticated: true });
+});
+
+galleriesRouter.post('/galleries/:slug/manage/rotate-token', async (c) => {
+  c.header('Cache-Control', 'private, no-store');
+
+  const slug = c.req.param('slug');
+  const auth = await requireGalleryAdmin(c, slug);
+  if (auth.rateLimited) {
+    return c.json({ error: 'Too many requests. Please wait a few minutes.', code: 'RATE_LIMITED' }, 429);
+  }
+  if (!auth.row) return c.json({ error: 'Invalid or missing manage token.' }, 401);
+
+  const newToken = randomToken(24);
+  const newTokenHash = await sha256Hex(newToken);
+
+  await c.env.DB.prepare('UPDATE galleries SET admin_token_hash = ?1 WHERE id = ?2')
+    .bind(newTokenHash, auth.row.id)
+    .run();
+
+  await setAdminCookieForSlug(c, slug, newTokenHash);
+
+  return c.json({
+    managePath: `/g/${slug}/manage#${newToken}`
+  });
+});
+
+galleriesRouter.post('/galleries/:slug/manage/logout', (c) => {
+  c.header('Cache-Control', 'private, no-store');
+  const slug = c.req.param('slug');
+  if (isValidSlugParam(slug)) {
+    clearAdminCookieForSlug(c, slug);
+  }
+  return c.json({ loggedOut: true });
+});
+
+galleriesRouter.get('/galleries/:slug/manage', async (c) => {
+  c.header('Cache-Control', 'private, no-store');
+
+  const slug = c.req.param('slug');
+  const auth = await requireGalleryAdmin(c, slug);
+  if (auth.rateLimited) {
+    return c.json({ error: 'Too many requests. Please wait a few minutes.', code: 'RATE_LIMITED' }, 429);
+  }
+  const row = auth.row;
+  if (!row) return c.json({ error: 'Invalid or missing manage token.' }, 401);
+
+  const storedItems = JSON.parse(row.items_json) as StoredMediaItem[];
+  const storedFolders = JSON.parse(row.folders_json) as StoredGalleryFolder[];
   const countsRes = await c.env.DB.prepare(
     'SELECT drive_file_id, COUNT(*) AS cnt FROM likes WHERE gallery_id = ?1 GROUP BY drive_file_id'
   )
@@ -556,46 +867,54 @@ galleriesRouter.get('/galleries/:slug/manage', async (c) => {
 
   const likeCounts: Record<string, number> = {};
   for (const r of countsRes.results) {
-    likeCounts[r.drive_file_id] = Number(r.cnt);
+    const publicId = toPublicFileId(storedItems, r.drive_file_id);
+    if (publicId) {
+      likeCounts[publicId] = Number(r.cnt);
+    }
   }
 
+  await setAdminCookieForSlug(c, row.slug, row.admin_token_hash);
   if (row.password_hash) {
     await setUnlockCookieForSlug(c, row.slug, row.password_hash);
   }
 
   return c.json({
-    gallery: toPublicConfig(row),
-    driveFolderId: row.drive_folder_id,
-    items,
-    folders,
+    gallery: toPublicConfig(row, storedItems),
+    driveFolderId: '',
+    items: toPublicItems(storedItems),
+    folders: toPublicFolders(storedFolders),
     likeCounts
   });
 });
 
 galleriesRouter.patch('/galleries/:slug/manage', async (c) => {
-  const row = await requireGalleryAdmin(
-    c.env.DB,
-    c.req.param('slug'),
-    c.req.header('authorization')
-  );
+  c.header('Cache-Control', 'private, no-store');
+
+  const slug = c.req.param('slug');
+  const auth = await requireGalleryAdmin(c, slug);
+  if (auth.rateLimited) {
+    return c.json({ error: 'Too many requests. Please wait a few minutes.', code: 'RATE_LIMITED' }, 429);
+  }
+  const row = auth.row;
   if (!row) return c.json({ error: 'Invalid or missing manage token.' }, 401);
 
-  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!body) return c.json({ error: 'Invalid JSON body.' }, 400);
+  const parsed = await readBoundedJsonObject(c, ALLOWED_PATCH_KEYS);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
 
-  const items = JSON.parse(row.items_json) as MediaItem[];
+  const storedItems = JSON.parse(row.items_json) as StoredMediaItem[];
 
   const title =
-    typeof body.title === 'string' && body.title.trim()
-      ? body.title.trim().slice(0, 120)
+    typeof body.title === 'string' && sanitizeControlChars(body.title, 120)
+      ? sanitizeControlChars(body.title, 120)
       : row.title;
   const description =
     typeof body.description === 'string'
-      ? body.description.trim().slice(0, 500)
+      ? sanitizeControlChars(body.description, 500)
       : row.description;
   const brandName =
     typeof body.brandName === 'string'
-      ? body.brandName.trim().slice(0, 80)
+      ? sanitizeControlChars(body.brandName, 80)
       : row.brand_name;
   const brandUrl =
     body.brandUrl !== undefined ? sanitizeHttpUrl(body.brandUrl) : row.brand_url;
@@ -609,6 +928,30 @@ galleriesRouter.patch('/galleries/:slug/manage', async (c) => {
     body.accentColor !== undefined
       ? sanitizeHexColor(body.accentColor)
       : sanitizeHexColor(row.accent_color);
+  const backgroundColor =
+    body.backgroundColor !== undefined
+      ? sanitizeHexColor(body.backgroundColor)
+      : sanitizeHexColor(row.background_color);
+  const surfaceColor =
+    body.surfaceColor !== undefined
+      ? sanitizeHexColor(body.surfaceColor)
+      : sanitizeHexColor(row.surface_color);
+  const textColor =
+    body.textColor !== undefined
+      ? sanitizeHexColor(body.textColor)
+      : sanitizeHexColor(row.text_color);
+  const heroStyle =
+    body.heroStyle !== undefined
+      ? validateHeroStyle(body.heroStyle)
+      : validateHeroStyle(row.hero_style);
+  const cardStyle =
+    body.cardStyle !== undefined
+      ? validateCardStyle(body.cardStyle)
+      : validateCardStyle(row.card_style);
+  const captionMode =
+    body.captionMode !== undefined
+      ? validateCaptionMode(body.captionMode)
+      : validateCaptionMode(row.caption_mode);
   const gridGap =
     body.gridGap !== undefined ? validateGridGap(body.gridGap) : validateGridGap(row.grid_gap);
   const cardRadius =
@@ -621,15 +964,28 @@ galleriesRouter.patch('/galleries/:slug/manage', async (c) => {
     typeof body.allowLikes === 'boolean' ? (body.allowLikes ? 1 : 0) : row.allow_likes;
 
   let coverFileId = row.cover_file_id;
-  if (typeof body.coverFileId === 'string' && items.some((i) => i.id === body.coverFileId)) {
-    coverFileId = body.coverFileId;
+  if (typeof body.coverFileId === 'string') {
+    const resolvedCover = resolveDriveFileId(storedItems, body.coverFileId);
+    if (resolvedCover) {
+      coverFileId = resolvedCover;
+    }
   }
 
   let passwordHash = row.password_hash;
   if (body.clearPassword === true) {
     passwordHash = null;
   } else if (typeof body.password === 'string' && body.password.trim()) {
-    passwordHash = await hashPassword(body.password.trim());
+    const newPw = body.password.trim();
+    if (newPw.length < PASSWORD_MIN_LENGTH || newPw.length > PASSWORD_MAX_LENGTH) {
+      return c.json(
+        {
+          error: `Gallery password must be between ${PASSWORD_MIN_LENGTH} and ${PASSWORD_MAX_LENGTH} characters.`,
+          code: 'INVALID_PASSWORD_POLICY'
+        },
+        400
+      );
+    }
+    passwordHash = await hashPassword(newPw);
   }
 
   let expiresAt = row.expires_at;
@@ -641,9 +997,11 @@ galleriesRouter.patch('/galleries/:slug/manage', async (c) => {
     `UPDATE galleries SET
       title = ?1, description = ?2, brand_name = ?3, brand_url = ?4,
       layout = ?5, theme = ?6, font_preset = ?7, accent_color = ?8,
-      grid_gap = ?9, card_radius = ?10, cover_file_id = ?11, allow_download = ?12,
-      allow_likes = ?13, password_hash = ?14, expires_at = ?15
-     WHERE id = ?16`
+      background_color = ?9, surface_color = ?10, text_color = ?11,
+      hero_style = ?12, card_style = ?13, caption_mode = ?14,
+      grid_gap = ?15, card_radius = ?16, cover_file_id = ?17, allow_download = ?18,
+      allow_likes = ?19, password_hash = ?20, expires_at = ?21
+     WHERE id = ?22`
   )
     .bind(
       title,
@@ -654,6 +1012,12 @@ galleriesRouter.patch('/galleries/:slug/manage', async (c) => {
       theme,
       fontPreset,
       accentColor,
+      backgroundColor,
+      surfaceColor,
+      textColor,
+      heroStyle,
+      cardStyle,
+      captionMode,
       gridGap,
       cardRadius,
       coverFileId,
@@ -673,17 +1037,21 @@ galleriesRouter.patch('/galleries/:slug/manage', async (c) => {
   }
 
   return c.json({
-    gallery: updated ? toPublicConfig(updated) : toPublicConfig(row)
+    gallery: updated
+      ? toPublicConfig(updated, storedItems)
+      : toPublicConfig(row, storedItems)
   });
 });
 
 galleriesRouter.post('/galleries/:slug/sync', async (c) => {
+  c.header('Cache-Control', 'private, no-store');
+
   const slug = c.req.param('slug');
-  const row = await requireGalleryAdmin(
-    c.env.DB,
-    slug,
-    c.req.header('authorization')
-  );
+  const auth = await requireGalleryAdmin(c, slug);
+  if (auth.rateLimited) {
+    return c.json({ error: 'Too many requests. Please wait a few minutes.', code: 'RATE_LIMITED' }, 429);
+  }
+  const row = auth.row;
   if (!row) return c.json({ error: 'Invalid or missing manage token.' }, 401);
 
   const ip = getClientIp(c);
@@ -696,6 +1064,15 @@ galleriesRouter.post('/galleries/:slug/sync', async (c) => {
   }
 
   const sync = await fetchDriveFolderTree(row.drive_folder_id, c.env.GOOGLE_DRIVE_API_KEY);
+  const prevItems = JSON.parse(row.items_json) as StoredMediaItem[];
+  const prevFolders = JSON.parse(row.folders_json) as StoredGalleryFolder[];
+  const { storedItems, storedFolders } = assignOpaqueIds(
+    sync.items,
+    sync.folders,
+    prevItems,
+    prevFolders
+  );
+
   const now = Date.now();
   const coverStillExists = sync.items.some((i) => i.id === row.cover_file_id);
   const coverFileId = coverStillExists ? row.cover_file_id : sync.items[0]?.id ?? null;
@@ -706,8 +1083,8 @@ galleriesRouter.post('/galleries/:slug/sync', async (c) => {
      WHERE id = ?6`
   )
     .bind(
-      JSON.stringify(sync.items),
-      JSON.stringify(sync.folders),
+      JSON.stringify(storedItems),
+      JSON.stringify(storedFolders),
       sync.items.length,
       coverFileId,
       now,
@@ -723,35 +1100,43 @@ galleriesRouter.post('/galleries/:slug/sync', async (c) => {
     itemCount: sync.items.length,
     syncedAt: now,
     truncated: sync.truncated,
-    items: sync.items,
-    folders: sync.folders
+    items: toPublicItems(storedItems),
+    folders: toPublicFolders(storedFolders)
   });
 });
 
 galleriesRouter.delete('/galleries/:slug', async (c) => {
-  const row = await requireGalleryAdmin(
-    c.env.DB,
-    c.req.param('slug'),
-    c.req.header('authorization')
-  );
+  c.header('Cache-Control', 'private, no-store');
+
+  const slug = c.req.param('slug');
+  const auth = await requireGalleryAdmin(c, slug);
+  if (auth.rateLimited) {
+    return c.json({ error: 'Too many requests. Please wait a few minutes.', code: 'RATE_LIMITED' }, 429);
+  }
+  const row = auth.row;
   if (!row) return c.json({ error: 'Invalid or missing manage token.' }, 401);
 
   await c.env.DB.prepare('DELETE FROM galleries WHERE id = ?1').bind(row.id).run();
   await invalidateGalleryCache(c.env.CACHE, row.slug);
+  clearAdminCookieForSlug(c, row.slug);
   return c.json({ deleted: true });
 });
 
 galleriesRouter.post('/galleries/:slug/report', async (c) => {
+  c.header('Cache-Control', 'private, no-store');
+
   const slug = c.req.param('slug');
+  if (!isValidSlugParam(slug)) {
+    return c.json({ error: 'Gallery not found.' }, 404);
+  }
+
   const ip = getClientIp(c);
-  const body = (await c.req.json().catch(() => null)) as {
-    reason?: string;
-    details?: string;
-    turnstileToken?: string;
-  } | null;
+  const parsed = await readBoundedJsonObject(c, ALLOWED_REPORT_KEYS, 8192);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
 
   const turnstileOk = await verifyTurnstile(
-    body?.turnstileToken,
+    typeof body.turnstileToken === 'string' ? body.turnstileToken : undefined,
     c.env.TURNSTILE_SECRET_KEY,
     ip
   );
@@ -767,10 +1152,12 @@ galleriesRouter.post('/galleries/:slug/report', async (c) => {
   const row = await getGalleryBySlug(c.env.DB, slug);
   if (!row) return c.json({ error: 'Gallery not found.' }, 404);
 
-  const reason = typeof body?.reason === 'string' && body.reason.trim()
-    ? body.reason.trim().slice(0, 80)
-    : 'Inappropriate content';
-  const details = typeof body?.details === 'string' ? body.details.trim().slice(0, 500) : '';
+  const reason =
+    typeof body.reason === 'string' && sanitizeControlChars(body.reason, 80)
+      ? sanitizeControlChars(body.reason, 80)
+      : 'Inappropriate content';
+  const details =
+    typeof body.details === 'string' ? sanitizeControlChars(body.details, 500) : '';
 
   await c.env.DB.prepare(
     'INSERT INTO abuse_reports (id, gallery_id, reason, details, created_at) VALUES (?1, ?2, ?3, ?4, ?5)'
@@ -782,13 +1169,25 @@ galleriesRouter.post('/galleries/:slug/report', async (c) => {
 });
 
 galleriesRouter.post('/moderation/:slug/block', async (c) => {
+  c.header('Cache-Control', 'private, no-store');
+
+  const ip = getClientIp(c);
+  const allowed = await checkRateLimit(c.env.CACHE, `rl:mod:${ip}`, 20, 900);
+  if (!allowed) {
+    return c.json({ error: 'Too many moderation requests.' }, 429);
+  }
+
   const modKey = c.env.ADMIN_MODERATION_KEY;
   const auth = c.req.header('authorization');
-  if (!modKey || !auth?.startsWith('Bearer ') || !timingSafeEqual(auth.slice(7), modKey)) {
+  if (!modKey || !auth?.startsWith('Bearer ') || !(await timingSafeEqual(auth.slice(7), modKey))) {
     return c.json({ error: 'Unauthorized.' }, 401);
   }
 
   const slug = c.req.param('slug');
+  if (!isValidSlugParam(slug)) {
+    return c.json({ error: 'Invalid gallery slug.' }, 400);
+  }
+
   await c.env.DB.prepare("UPDATE galleries SET status = 'blocked' WHERE slug = ?1")
     .bind(slug)
     .run();

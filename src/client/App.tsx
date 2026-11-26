@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { FEEDBACK_FORM_URL, REPORT_FORM_URL } from '../shared/contact';
 import type { AppPublicConfig } from '../shared/types';
 import { DonateModal } from './components/DonateModal';
 import { fetchAppConfig } from './lib/api';
@@ -9,6 +10,8 @@ import { ManagePage } from './pages/ManagePage';
 const DEFAULT_CONFIG: AppPublicConfig = {
   appName: 'UnwrittenChapters',
   donateUrl: '',
+  feedbackFormUrl: FEEDBACK_FORM_URL,
+  reportFormUrl: REPORT_FORM_URL,
   turnstileSiteKey: '',
   turnstileRequired: false
 };
