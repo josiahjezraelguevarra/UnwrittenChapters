@@ -206,6 +206,16 @@ export function HomePage({
                 How It Works
               </a>
               <a
+                href="/tools"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onNavigate('/tools');
+                }}
+                className={navLinkClass}
+              >
+                Photo Tools
+              </a>
+              <a
                 href="#donate"
                 onClick={(e) => {
                   e.preventDefault();
@@ -558,6 +568,16 @@ export function HomePage({
               </a>
               <a href="#how-it-works" className="hover:opacity-100">
                 How It Works
+              </a>
+              <a
+                href="/tools"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onNavigate('/tools');
+                }}
+                className="hover:opacity-100"
+              >
+                Free Photo Tools
               </a>
               <a href="#donate" className="hover:opacity-100">
                 Donate

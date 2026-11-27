@@ -118,6 +118,11 @@ app.get('/sitemap.xml', (c) => {
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
+  <url>
+    <loc>${origin}/tools</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
 </urlset>
 `;
   return c.text(xml, 200, {

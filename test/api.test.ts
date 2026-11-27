@@ -866,4 +866,11 @@ describe('Gallery API & Media Proxy security', () => {
     const patched = (await patchRes.json()) as { gallery: { autoSync: boolean } };
     expect(patched.gallery.autoSync).toBe(false);
   });
+
+  it('includes /tools in sitemap.xml for organic discovery', async () => {
+    const res = await app.request('/sitemap.xml', {}, env);
+    expect(res.status).toBe(200);
+    const xml = await res.text();
+    expect(xml).toContain('/tools');
+  });
 });

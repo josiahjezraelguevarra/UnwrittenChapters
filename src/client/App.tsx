@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { FEEDBACK_FORM_URL, REPORT_FORM_URL } from '../shared/contact';
 import type { AppPublicConfig } from '../shared/types';
 import { DonateModal } from './components/DonateModal';
@@ -7,6 +7,10 @@ import { GalleryPage } from './pages/GalleryPage';
 import { HomePage } from './pages/HomePage';
 import { ManagePage } from './pages/ManagePage';
 import { MediaViewPage } from './pages/MediaViewPage';
+
+const ToolsPage = lazy(() =>
+  import('./pages/ToolsPage').then((m) => ({ default: m.ToolsPage }))
+);
 
 const DEFAULT_CONFIG: AppPublicConfig = {
   appName: 'UnwrittenChapters',
@@ -69,6 +73,7 @@ export function App() {
   const manageMatch = pathname.match(/^\/g\/([a-zA-Z0-9_-]+)\/manage\/?$/);
   const mediaViewMatch = pathname.match(/^\/g\/([a-zA-Z0-9_-]+)\/view\/([a-zA-Z0-9_-]+)\/?$/);
   const galleryMatch = pathname.match(/^\/g\/([a-zA-Z0-9_-]+)\/?$/);
+  const isToolsRoute = pathname === '/tools' || pathname === '/tools/';
 
   return (
     <>
@@ -88,6 +93,16 @@ export function App() {
           onOpenDonate={() => setDonateOpen(true)}
           onNavigate={navigate}
         />
+      ) : isToolsRoute ? (
+        <Suspense
+          fallback={
+            <div className="flex min-h-screen items-center justify-center bg-[#f8f6f2] text-sm text-slate-600">
+              Loading photo tools...
+            </div>
+          }
+        >
+          <ToolsPage config={config} onNavigate={navigate} />
+        </Suspense>
       ) : (
         <HomePage
           config={config}
@@ -103,7 +118,7 @@ export function App() {
         onClose={() => setDonateOpen(false)}
         appName={config.appName}
         donateUrl={config.donateUrl}
-        dark={!manageMatch && !mediaViewMatch && !galleryMatch && homeTheme === 'dark'}
+        dark={!manageMatch && !mediaViewMatch && !galleryMatch && !isToolsRoute && homeTheme === 'dark'}
       />
     </>
   );
