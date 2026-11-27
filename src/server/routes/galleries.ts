@@ -208,7 +208,15 @@ function sanitizeHttpUrl(raw: unknown): string {
 }
 
 function validateLayout(raw: unknown): GalleryLayout {
-  if (raw === 'grid' || raw === 'justified' || raw === 'masonry') return raw;
+  if (
+    raw === 'grid' ||
+    raw === 'justified' ||
+    raw === 'masonry' ||
+    raw === 'large' ||
+    raw === 'editorial'
+  ) {
+    return raw;
+  }
   return 'masonry';
 }
 

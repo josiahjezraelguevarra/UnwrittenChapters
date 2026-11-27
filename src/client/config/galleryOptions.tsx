@@ -1,4 +1,4 @@
-import { Clock, LayoutGrid, Moon, Rows3, Square, Sun } from 'lucide-react';
+import { Clock, Columns2, LayoutGrid, Maximize, Moon, Rows3, Square, Sun } from 'lucide-react';
 import type { GalleryLayout, GalleryTheme } from '../../shared/types';
 import type { CustomSelectOption } from '../components/CustomSelect';
 
@@ -20,6 +20,18 @@ export const LAYOUT_SELECT_OPTIONS: CustomSelectOption<GalleryLayout>[] = [
     label: 'Square Grid',
     description: 'Symmetrical 1:1 cropped tiles',
     icon: <Square className="h-4 w-4" />
+  },
+  {
+    value: 'large',
+    label: 'Large Showcase',
+    description: 'Generous 1–2 column feature frames',
+    icon: <Maximize className="h-4 w-4" />
+  },
+  {
+    value: 'editorial',
+    label: 'Editorial Mix',
+    description: 'Magazine hero spans & paired tiles',
+    icon: <Columns2 className="h-4 w-4" />
   }
 ];
 

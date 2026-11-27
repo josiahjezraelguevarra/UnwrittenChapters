@@ -1,5 +1,7 @@
-import type { CSSProperties, RefObject } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import {
+  ChevronDown,
+  Columns2,
   Download,
   ExternalLink,
   Flag,
@@ -8,6 +10,7 @@ import {
   Image as ImageIcon,
   LayoutGrid,
   Loader2,
+  Maximize,
   Play,
   Rows3,
   Square,
@@ -135,6 +138,39 @@ export function GallerySurface({
   const resolveThumb = (fileId: string, width: number) =>
     previewImageMap?.[fileId] || mediaThumbUrl(slug, fileId, width);
 
+  const toolbarRef = useRef<HTMLElement>(null);
+  const [galleryRevealed, setGalleryRevealed] = useState(
+    previewMode || heroStyle !== 'fullscreen'
+  );
+
+  useEffect(() => {
+    if (previewMode || heroStyle !== 'fullscreen') {
+      setGalleryRevealed(true);
+      return;
+    }
+    const target = toolbarRef.current;
+    if (!target || typeof IntersectionObserver === 'undefined') {
+      setGalleryRevealed(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setGalleryRevealed(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.08 }
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [previewMode, heroStyle]);
+
+  const scrollToGallery = () => {
+    setGalleryRevealed(true);
+    toolbarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   const hasSubfolders = folders.length > 1;
   const photoCount = items.filter((i) => i.kind === 'image').length;
   const videoCount = items.filter((i) => i.kind === 'video').length;
@@ -145,26 +181,38 @@ export function GallerySurface({
     layout === 'masonry'
       ? previewMode
         ? isMobilePreview
-          ? 'columns-1'
+          ? 'columns-2'
           : 'columns-2 md:columns-3'
         : 'masonry-columns'
       : layout === 'justified'
         ? 'justified-grid'
-        : previewMode
-          ? isMobilePreview
-            ? 'grid grid-cols-2'
-            : 'grid grid-cols-2 sm:grid-cols-3'
-          : 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5';
+        : layout === 'large'
+          ? previewMode
+            ? isMobilePreview
+              ? 'mx-auto grid max-w-5xl grid-cols-1'
+              : 'mx-auto grid max-w-5xl grid-cols-1 sm:grid-cols-2'
+            : 'mx-auto grid max-w-5xl grid-cols-1 md:grid-cols-2'
+          : layout === 'editorial'
+            ? previewMode
+              ? isMobilePreview
+                ? 'grid grid-cols-2'
+                : 'grid grid-cols-2 sm:grid-cols-4'
+              : 'grid grid-cols-2 md:grid-cols-4'
+            : previewMode
+              ? isMobilePreview
+                ? 'grid grid-cols-2'
+                : 'grid grid-cols-2 sm:grid-cols-3'
+              : 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5';
 
   const gridContainerStyle: CSSProperties | undefined =
-    layout === 'grid'
+    layout === 'grid' || layout === 'large' || layout === 'editorial'
       ? { gap: gapCss }
       : layout === 'masonry' && previewMode
         ? { columnGap: gapCss }
         : undefined;
 
   const innerMediaRadius =
-    cardStyle === 'mat'
+    cardStyle === 'mat' || cardStyle === 'polaroid'
       ? radiusCss === '0px'
         ? '0px'
         : '0.45rem'
@@ -232,49 +280,173 @@ export function GallerySurface({
       }
     >
       {/* Hero Cover */}
-      <header
-        className="relative overflow-hidden border-b"
-        style={{ borderColor: tokens.border }}
-      >
-        {heroStyle === 'banner' && coverId && (
-          <div className="absolute inset-0">
-            <img
-              src={resolveThumb(coverId, previewMode ? 1200 : 1600)}
-              alt=""
-              className="h-full w-full object-cover opacity-35 blur-xs"
-            />
-            <div
-              className="absolute inset-0"
-              style={{
-                background: `linear-gradient(to bottom, ${hexToRgba(tokens.bg, 0.52)}, ${hexToRgba(
-                  tokens.bg,
-                  0.84
-                )} 65%, ${tokens.bg})`
-              }}
-            />
-          </div>
-        )}
-
-        <div
-          className={`relative mx-auto max-w-6xl ${
+      {heroStyle === 'fullscreen' ? (
+        <header
+          className={`relative flex flex-col justify-between overflow-hidden border-b ${
             previewMode
               ? isMobilePreview
-                ? 'px-4 py-7'
-                : 'px-5 py-9'
-              : 'px-4 py-12 sm:px-6 sm:py-16'
+                ? 'min-h-[380px]'
+                : 'min-h-[440px]'
+              : 'min-h-[100svh]'
           }`}
+          style={{
+            borderColor: tokens.border,
+            color: coverId ? '#ffffff' : tokens.fg
+          }}
         >
-          {renderBrandHeader()}
+          {coverId && (
+            <div className="absolute inset-0">
+              <img
+                src={resolveThumb(coverId, previewMode ? 1200 : 1600)}
+                alt=""
+                className="h-full w-full scale-[1.02] object-cover"
+              />
+              <div
+                className="absolute inset-0"
+                style={{
+                  background:
+                    'linear-gradient(to bottom, rgba(10,10,12,0.45), rgba(10,10,12,0.52) 52%, rgba(10,10,12,0.78))'
+                }}
+              />
+            </div>
+          )}
 
-          {heroStyle === 'split' && coverId ? (
-            <div
-              className={`mt-6 grid grid-cols-1 items-center gap-6 ${
-                isMobilePreview ? '' : 'md:grid-cols-12 md:gap-8'
+          <div className="relative z-10 mx-auto w-full max-w-6xl px-4 pt-6 sm:px-6 sm:pt-8">
+            {renderBrandHeader()}
+          </div>
+
+          <div className="relative z-10 mx-auto flex max-w-3xl flex-1 flex-col items-center justify-center px-5 py-10 text-center">
+            {gallery.brandName && (
+              <p className="mb-3 text-xs font-semibold tracking-[0.22em] uppercase opacity-80">
+                {gallery.brandName}
+              </p>
+            )}
+            <h1
+              className={`font-bold tracking-tight ${
+                isMobilePreview
+                  ? 'text-3xl'
+                  : previewMode
+                    ? 'text-4xl'
+                    : 'text-4xl sm:text-6xl'
               }`}
+              style={{ fontFamily: fontMeta.headingFamily }}
             >
-              <div className={isMobilePreview ? '' : 'md:col-span-7'}>
+              {gallery.title || 'Untitled Gallery'}
+            </h1>
+            {gallery.description && (
+              <p className="mt-4 max-w-xl text-sm leading-relaxed opacity-90 sm:text-base">
+                {gallery.description}
+              </p>
+            )}
+            <p className="mt-4 text-xs font-medium tracking-wide opacity-80">
+              {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
+              {videoCount > 0 ? ` · ${videoCount} ${videoCount === 1 ? 'video' : 'videos'}` : ''}
+              {hasSubfolders ? ` · ${folders.length} chapters` : ''}
+              {!previewMode ? ` · ${gallery.viewCount + 1} views` : ''}
+            </p>
+          </div>
+
+          <div className="relative z-10 flex justify-center pb-8 sm:pb-12">
+            <button
+              type="button"
+              onClick={previewMode ? undefined : scrollToGallery}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-white/35 bg-black/35 px-5 text-xs font-semibold tracking-wide text-white backdrop-blur-md transition hover:bg-black/55"
+            >
+              <span>View Gallery</span>
+              <ChevronDown className="uc-hero-bounce h-4 w-4" />
+            </button>
+          </div>
+        </header>
+      ) : (
+        <header
+          className="relative overflow-hidden border-b"
+          style={{ borderColor: tokens.border }}
+        >
+          {heroStyle === 'banner' && coverId && (
+            <div className="absolute inset-0">
+              <img
+                src={resolveThumb(coverId, previewMode ? 1200 : 1600)}
+                alt=""
+                className="h-full w-full object-cover opacity-35 blur-xs"
+              />
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: `linear-gradient(to bottom, ${hexToRgba(tokens.bg, 0.52)}, ${hexToRgba(
+                    tokens.bg,
+                    0.84
+                  )} 65%, ${tokens.bg})`
+                }}
+              />
+            </div>
+          )}
+
+          <div
+            className={`relative mx-auto max-w-6xl ${
+              previewMode
+                ? isMobilePreview
+                  ? 'px-4 py-7'
+                  : 'px-5 py-9'
+                : 'px-4 py-12 sm:px-6 sm:py-16'
+            }`}
+          >
+            {renderBrandHeader()}
+
+            {heroStyle === 'split' && coverId ? (
+              <div
+                className={`mt-6 grid grid-cols-1 items-center gap-6 ${
+                  isMobilePreview ? '' : 'md:grid-cols-12 md:gap-8'
+                }`}
+              >
+                <div className={isMobilePreview ? '' : 'md:col-span-7'}>
+                  <h1
+                    className={`font-bold tracking-tight ${
+                      isMobilePreview
+                        ? 'text-2xl'
+                        : previewMode
+                          ? 'text-3xl sm:text-4xl'
+                          : 'text-3xl sm:text-5xl'
+                    }`}
+                    style={{ fontFamily: fontMeta.headingFamily }}
+                  >
+                    {gallery.title || 'Untitled Gallery'}
+                  </h1>
+                  {gallery.description && (
+                    <p
+                      className="mt-3 max-w-2xl text-sm sm:text-base"
+                      style={{ color: tokens.mutedFg }}
+                    >
+                      {gallery.description}
+                    </p>
+                  )}
+                  <p className="mt-4 text-xs font-medium" style={{ color: tokens.mutedFg }}>
+                    {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
+                    {videoCount > 0 ? ` · ${videoCount} ${videoCount === 1 ? 'video' : 'videos'}` : ''}
+                    {hasSubfolders ? ` · ${folders.length} folders` : ''}
+                    {!previewMode ? ` · ${gallery.viewCount + 1} views` : ''}
+                  </p>
+                </div>
+                <div className={isMobilePreview ? '' : 'md:col-span-5'}>
+                  <div
+                    className="overflow-hidden border shadow-md"
+                    style={{
+                      borderRadius: radiusCss,
+                      borderColor: tokens.border,
+                      backgroundColor: tokens.surface
+                    }}
+                  >
+                    <img
+                      src={resolveThumb(coverId, previewMode ? 800 : 1200)}
+                      alt=""
+                      className="aspect-[4/3] w-full object-cover"
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div>
                 <h1
-                  className={`font-bold tracking-tight ${
+                  className={`mt-4 font-bold tracking-tight ${
                     isMobilePreview
                       ? 'text-2xl'
                       : previewMode
@@ -300,58 +472,15 @@ export function GallerySurface({
                   {!previewMode ? ` · ${gallery.viewCount + 1} views` : ''}
                 </p>
               </div>
-              <div className={isMobilePreview ? '' : 'md:col-span-5'}>
-                <div
-                  className="overflow-hidden border shadow-md"
-                  style={{
-                    borderRadius: radiusCss,
-                    borderColor: tokens.border,
-                    backgroundColor: tokens.surface
-                  }}
-                >
-                  <img
-                    src={resolveThumb(coverId, previewMode ? 800 : 1200)}
-                    alt=""
-                    className="aspect-[4/3] w-full object-cover"
-                  />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <h1
-                className={`mt-4 font-bold tracking-tight ${
-                  isMobilePreview
-                    ? 'text-2xl'
-                    : previewMode
-                      ? 'text-3xl sm:text-4xl'
-                      : 'text-3xl sm:text-5xl'
-                }`}
-                style={{ fontFamily: fontMeta.headingFamily }}
-              >
-                {gallery.title || 'Untitled Gallery'}
-              </h1>
-              {gallery.description && (
-                <p
-                  className="mt-3 max-w-2xl text-sm sm:text-base"
-                  style={{ color: tokens.mutedFg }}
-                >
-                  {gallery.description}
-                </p>
-              )}
-              <p className="mt-4 text-xs font-medium" style={{ color: tokens.mutedFg }}>
-                {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
-                {videoCount > 0 ? ` · ${videoCount} ${videoCount === 1 ? 'video' : 'videos'}` : ''}
-                {hasSubfolders ? ` · ${folders.length} folders` : ''}
-                {!previewMode ? ` · ${gallery.viewCount + 1} views` : ''}
-              </p>
-            </div>
-          )}
-        </div>
-      </header>
+            )}
+          </div>
+        </header>
+      )}
 
       {/* Toolbar */}
       <nav
+        ref={toolbarRef}
+        id="gallery-toolbar"
         aria-label="Gallery filters and actions"
         className="sticky top-0 z-20 border-b backdrop-blur-md transition-colors"
         style={{
@@ -411,7 +540,9 @@ export function GallerySurface({
                 [
                   ['masonry', LayoutGrid, 'Masonry layout'],
                   ['justified', Rows3, 'Justified rows layout'],
-                  ['grid', Square, 'Square grid layout']
+                  ['grid', Square, 'Square grid layout'],
+                  ['large', Maximize, 'Large showcase layout'],
+                  ['editorial', Columns2, 'Editorial magazine layout']
                 ] as const
               ).map(([mode, Icon, label]) => {
                 const active = layout === mode;
@@ -603,20 +734,36 @@ export function GallerySurface({
             </button>
           </div>
         ) : (
-          <div ref={gridRef} className={gridContainerClass} style={gridContainerStyle}>
-            {filteredItems.map((item) => {
+          <div
+            ref={gridRef}
+            className={`${gridContainerClass} ${galleryRevealed ? 'uc-slide-reveal' : 'opacity-0'}`}
+            style={gridContainerStyle}
+          >
+            {filteredItems.map((item, idx) => {
               const liked = visitorLikes.has(item.id);
               const count = likeCounts[item.id] || 0;
-              const thumbSrc = resolveThumb(item.id, previewMode ? 600 : 800);
+              const thumbSrc = resolveThumb(
+                item.id,
+                previewMode ? 600 : layout === 'large' || (layout === 'editorial' && idx % 5 === 0) ? 1200 : 800
+              );
+              const isEditorialHero = layout === 'editorial' && idx % 5 === 0;
               const aspectRatio =
-                layout === 'grid' ? '1 / 1' : `${item.width || 4} / ${item.height || 3}`;
+                layout === 'grid'
+                  ? '1 / 1'
+                  : isEditorialHero
+                    ? '16 / 10'
+                    : layout === 'editorial'
+                      ? '4 / 5'
+                      : `${item.width || 4} / ${item.height || 3}`;
 
               const cardClass =
                 layout === 'masonry'
                   ? 'masonry-item group relative overflow-hidden'
                   : layout === 'justified'
                     ? 'justified-item group relative flex flex-col overflow-hidden'
-                    : 'group relative overflow-hidden';
+                    : isEditorialHero
+                      ? 'col-span-2 group relative overflow-hidden'
+                      : 'group relative overflow-hidden';
 
               const justifiedFlexGrow =
                 layout === 'justified'
@@ -631,13 +778,29 @@ export function GallerySurface({
                 ...justifiedFlexGrow,
                 borderRadius: radiusCss,
                 backgroundColor:
-                  cardStyle === 'clean' ? tokens.cardBg : tokens.surface,
+                  cardStyle === 'clean'
+                    ? tokens.cardBg
+                    : cardStyle === 'polaroid'
+                      ? '#ffffff'
+                      : tokens.surface,
                 ...(cardStyle === 'framed' || cardStyle === 'mat'
                   ? { border: `1px solid ${tokens.border}` }
                   : {}),
                 ...(cardStyle === 'mat'
                   ? { padding: previewMode ? '8px' : '12px' }
-                  : {})
+                  : cardStyle === 'polaroid'
+                    ? {
+                        border: `1px solid ${tokens.border}`,
+                        padding: previewMode ? '8px 8px 22px' : '12px 12px 32px',
+                        boxShadow: '0 8px 24px rgba(15, 23, 42, 0.12)',
+                        color: '#141311'
+                      }
+                    : cardStyle === 'shadow'
+                      ? {
+                          border: `1px solid ${tokens.border}`,
+                          boxShadow: '0 14px 32px rgba(15, 23, 42, 0.18)'
+                        }
+                      : {})
               };
 
               const mediaWrapperClass =
@@ -767,8 +930,13 @@ export function GallerySurface({
                     )}
                   </div>
 
-                  {/* Always-Visible Editorial Caption Plaque */}
-                  {captionMode === 'below' && (
+                  {/* Polaroid / Always-Visible Editorial Caption Plaque */}
+                  {cardStyle === 'polaroid' && captionMode !== 'hidden' ? (
+                    <p className="mt-2 truncate text-center text-[11px] font-medium tracking-tight text-[#141311]/80">
+                      {item.name}
+                    </p>
+                  ) : (
+                    captionMode === 'below' && (
                     <div
                       className={`shrink-0 ${
                         cardStyle === 'mat'
@@ -798,7 +966,7 @@ export function GallerySurface({
                         )}
                       </p>
                     </div>
-                  )}
+                  ))}
                 </article>
               );
             })}

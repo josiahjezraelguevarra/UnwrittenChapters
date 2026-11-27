@@ -514,7 +514,7 @@ export function GalleryStyleControls({
             <div
               role="radiogroup"
               aria-label="Hero Header Style"
-              className="mt-1.5 grid grid-cols-3 gap-1.5"
+              className="mt-1.5 grid grid-cols-2 gap-1.5 sm:grid-cols-4"
             >
               {HERO_LIST.map((opt) => {
                 const selected = values.heroStyle === opt.id;
@@ -560,7 +560,7 @@ export function GalleryStyleControls({
               <div
                 role="radiogroup"
                 aria-label="Photo Frame"
-                className={`mt-1.5 grid grid-cols-3 gap-1 rounded-lg border p-1 ${
+                className={`mt-1.5 grid grid-cols-2 gap-1 rounded-lg border p-1 sm:grid-cols-3 ${
                   dark ? 'border-[#f4f1ea]/15 bg-[#1c1b18]' : 'border-stone-200 bg-stone-100'
                 }`}
               >

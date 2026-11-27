@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import {
   ArrowLeft,
   Check,
+  Columns2,
   Copy,
   Download,
   ExternalLink,
@@ -11,6 +12,7 @@ import {
   KeyRound,
   LayoutGrid,
   Lock,
+  Maximize,
   Maximize2,
   Minimize2,
   Monitor,
@@ -116,7 +118,7 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
   const [backgroundColor, setBackgroundColor] = useState('');
   const [surfaceColor, setSurfaceColor] = useState('');
   const [textColor, setTextColor] = useState('');
-  const [heroStyle, setHeroStyle] = useState<GalleryHeroStyle>('banner');
+  const [heroStyle, setHeroStyle] = useState<GalleryHeroStyle>('fullscreen');
   const [cardStyle, setCardStyle] = useState<GalleryCardStyle>('clean');
   const [captionMode, setCaptionMode] = useState<GalleryCaptionMode>('hover');
   const [gridGap, setGridGap] = useState<GalleryGridGap>('normal');
@@ -1163,7 +1165,9 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
                     [
                       ['masonry', LayoutGrid, 'Masonry'],
                       ['justified', Rows3, 'Justified'],
-                      ['grid', Square, 'Grid']
+                      ['grid', Square, 'Grid'],
+                      ['large', Maximize, 'Large'],
+                      ['editorial', Columns2, 'Editorial']
                     ] as const
                   ).map(([mode, Icon, label]) => (
                     <button

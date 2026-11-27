@@ -15,7 +15,7 @@ export type {
   GalleryGridGap,
   GalleryHeroStyle
 };
-export type GalleryLayout = 'masonry' | 'grid' | 'justified';
+export type GalleryLayout = 'masonry' | 'grid' | 'justified' | 'large' | 'editorial';
 export type GalleryTheme = 'light' | 'dark';
 export type MediaKind = 'image' | 'video';
 
