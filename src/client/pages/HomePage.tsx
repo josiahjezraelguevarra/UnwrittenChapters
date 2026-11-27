@@ -1,10 +1,24 @@
 import { useCallback, useRef, useState } from 'react';
 import {
   ArrowDownRight,
+  BookmarkCheck,
+  Camera,
+  Cloud,
+  Film,
+  FolderKanban,
+  Folders,
+  HardDriveDownload,
   Heart,
+  KeyRound,
+  Link2,
   Moon,
+  Palette,
+  RefreshCw,
+  Send,
+  Sparkles,
   Sun,
-  Trash2
+  Trash2,
+  Wand2
 } from 'lucide-react';
 import type {
   AppPublicConfig,
@@ -12,6 +26,10 @@ import type {
 } from '../../shared/types';
 import { buildSupportMailto } from '../../shared/contact';
 import { HeroGalleryMockup } from '../components/HeroGalleryMockup';
+import {
+  DriveToGalleryIllustration,
+  HowItWorksIllustration
+} from '../components/HomeIllustrations';
 import { OpeningIntro, hasSeenIntro } from '../components/OpeningIntro';
 import { StudioBuilder } from '../components/StudioBuilder';
 import { VerseTickerBar } from '../components/VerseTickerBar';
@@ -32,78 +50,92 @@ interface HomePageProps {
 const AUDIENCE_LIST = [
   {
     index: '01',
+    icon: Camera,
     title: 'Wedding & Portrait Studios',
     detail:
-      'Deliver full-screen cover galleries with favorites, QR print cards, and Lightroom exports.'
+      'Full-screen cover galleries with favorites, QR print cards, and Lightroom exports.'
   },
   {
     index: '02',
+    icon: FolderKanban,
     title: 'Multi-Folder Events',
     detail:
-      'Combine up to 3 public Drive folders into one album organized cleanly by chapter.'
+      'Combine up to 3 public Drive folders into one clean, chaptered album.'
   },
   {
     index: '03',
+    icon: Film,
     title: 'Photo & Video Creators',
     detail:
       'Dedicated photo studio and HD video views with swipe navigation and download locks.'
   },
   {
     index: '04',
+    icon: Wand2,
     title: 'Free Browser Photo Tools',
     detail:
-      'Batch watermark, strip GPS/EXIF, build QR cards, and split carousels locally on your device.'
+      'Watermark, strip location/camera info, make QR cards, and split carousels on your device.'
   }
 ];
 
-const HOW_IT_WORKS_STEPS = [
+const HOW_IT_WORKS_STEPS: Array<{
+  step: '01' | '02' | '03';
+  title: string;
+  body: string;
+}> = [
   {
     step: '01',
     title: 'Share your Drive folder',
-    body: 'In Google Drive, set folder access to "Anyone with the link → Viewer". Subfolders are indexed automatically.'
+    body: 'Set folder access to "Anyone with the link → Viewer". Subfolders load automatically.'
   },
   {
     step: '02',
-    title: 'Paste up to 3 links & style',
-    body: 'Drop 1–3 folder links above, then pick your cover hero, layout, frame, download rules, or password in Manager.'
+    title: 'Paste 1–3 links & style',
+    body: 'Drop up to 3 links above, then pick your cover hero, layout, frame, or password.'
   },
   {
     step: '03',
     title: 'Share link or 4×6 QR card',
-    body: 'Send your gallery link or print a QR card. New photos added to Drive auto-sync in the background.'
+    body: 'Send the link or print a QR card. Drive updates auto-sync in the background.'
   }
 ];
 
 const SYSTEM_LIMITATIONS = [
   {
+    icon: Link2,
     label: 'Public Drive Link Required',
     detail:
-      'Folders must be set to "Anyone with the link → Viewer". Private folders that require signing in cannot be loaded.'
+      'Folders must use "Anyone with the link → Viewer". Private sign-in folders cannot be loaded.'
   },
   {
+    icon: Folders,
     label: 'Album & Folder Limits',
     detail:
-      'Supports up to 3 Drive links, 3 folder levels deep, 40 subfolders, and 2,000 photo or video items per album.'
+      'Up to 3 Drive links, 3 folder levels deep, 40 subfolders, and 2,000 items per album.'
   },
   {
-    label: 'Sync Timing & Busy-Hour Pauses',
+    icon: RefreshCw,
+    label: 'Sync Timing & Busy Hours',
     detail:
-      'Auto-sync checks for Drive changes about every 6 hours (or anytime via Re-sync). During busy times, free daily limits may briefly pause loading or syncing.'
+      'Auto-sync checks roughly every 6 hours (or via Re-sync). Busy times may briefly pause free traffic.'
   },
   {
+    icon: HardDriveDownload,
     label: 'Large ZIPs & Photo Tools',
     detail:
-      'ZIP downloads and the free Photo Tools (up to 40 photos per batch) run on your own device, so huge albums may feel slow on older phones.'
+      'ZIP downloads and Photo Tools (40 photos/batch) run on your device—huge folders feel slower on older phones.'
   },
   {
+    icon: Cloud,
     label: 'Files Stay on Google Drive',
     detail:
-      'We do not keep copies of your media—deleting, moving, or unsharing files in Drive (or an expired link) removes access here automatically.'
+      'We keep zero file copies. Deleting or unsharing in Drive (or link expiry) removes access automatically.'
   },
   {
-    label: 'No Accounts or Link Recovery',
+    icon: BookmarkCheck,
+    label: 'No Accounts or Recovery',
     detail:
-      'There are no sign-ins or recovery emails. Bookmark your secret Manage link right away—it is the only key to edit or delete a gallery.'
+      'No logins or recovery emails. Bookmark your secret Manage link—it is the sole key to edit or delete.'
   }
 ];
 
@@ -318,30 +350,57 @@ export function HomePage({
               </div>
             </div>
 
-            <div className={`mt-14 grid grid-cols-1 gap-8 border-t pt-6 sm:grid-cols-3 ${borderRule}`}>
-              <div>
-                <p className="text-sm font-medium">
-                  <span className={`mr-2 tabular-nums ${mutedText}`}>01</span>Zero sign-up
-                </p>
-                <p className={`mt-1.5 text-[15px] leading-relaxed ${bodyText}`}>
-                  No logins needed—share a gallery link with clients and keep a secret Manage link.
-                </p>
+            <div className={`mt-14 grid grid-cols-1 gap-6 border-t pt-6 sm:grid-cols-3 ${borderRule}`}>
+              <div className="flex items-start gap-3">
+                <span
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${
+                    isDark
+                      ? 'border-[#f4f1ea]/15 bg-[#1b1a17] text-[#f4f1ea]'
+                      : 'border-[#141311]/12 bg-white text-[#141311]'
+                  }`}
+                >
+                  <KeyRound className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold">Zero sign-up</p>
+                  <p className={`mt-1 text-sm leading-relaxed ${bodyText}`}>
+                    Share a gallery link with clients and keep your Manage key private.
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium">
-                  <span className={`mr-2 tabular-nums ${mutedText}`}>02</span>Studio styling
-                </p>
-                <p className={`mt-1.5 text-[15px] leading-relaxed ${bodyText}`}>
-                  Full-screen cover hero, 5 layouts, Polaroid &amp; mat frames, and live preview.
-                </p>
+              <div className="flex items-start gap-3">
+                <span
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${
+                    isDark
+                      ? 'border-[#f4f1ea]/15 bg-[#1b1a17] text-[#f4f1ea]'
+                      : 'border-[#141311]/12 bg-white text-[#141311]'
+                  }`}
+                >
+                  <Palette className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold">Studio styling</p>
+                  <p className={`mt-1 text-sm leading-relaxed ${bodyText}`}>
+                    Full-screen cover hero, 5 layouts, Polaroid &amp; mat frames, and live preview.
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium">
-                  <span className={`mr-2 tabular-nums ${mutedText}`}>03</span>Smart delivery
-                </p>
-                <p className={`mt-1.5 text-[15px] leading-relaxed ${bodyText}`}>
-                  Separate photo &amp; video views, QR print cards, favorites, and instant ZIPs.
-                </p>
+              <div className="flex items-start gap-3">
+                <span
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${
+                    isDark
+                      ? 'border-[#f4f1ea]/15 bg-[#1b1a17] text-[#f4f1ea]'
+                      : 'border-[#141311]/12 bg-white text-[#141311]'
+                  }`}
+                >
+                  <Send className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold">Smart delivery</p>
+                  <p className={`mt-1 text-sm leading-relaxed ${bodyText}`}>
+                    Photo &amp; HD video views, QR print cards, favorites, and ZIP export.
+                  </p>
+                </div>
               </div>
             </div>
             </section>
@@ -426,20 +485,18 @@ export function HomePage({
           >
             <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:gap-12">
               <div className="lg:col-span-5">
-                <p className={`text-sm font-medium ${mutedText}`}>
-                  About
+                <p className={`inline-flex items-center gap-1.5 text-sm font-medium ${mutedText}`}>
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>About</span>
                 </p>
                 <h2 className="mt-3 text-2xl leading-tight font-semibold tracking-tight sm:text-3xl">
                   Give Drive folders a finished gallery experience.
                 </h2>
                 <p className={`mt-4 max-w-[46ch] text-[15px] leading-relaxed sm:text-base ${bodyText}`}>
-                  Raw Drive links feel unfinished to clients. {config.appName} wraps your Drive
-                  folders in a clean, customizable gallery—while your files stay safely on Google
-                  Drive.
+                  Raw Drive links feel unfinished to clients. {config.appName} wraps your folders in
+                  a clean, custom gallery while files stay safely in Google Drive.
                 </p>
-                <p className={`mt-3 text-sm leading-relaxed sm:text-base ${bodyText}`}>
-                  No accounts, no storage bills, and no re-uploads.
-                </p>
+                <DriveToGalleryIllustration dark={isDark} />
               </div>
 
               <div className="lg:col-span-7">
@@ -447,19 +504,28 @@ export function HomePage({
                   Who uses it
                 </p>
                 <div className={`mt-4 divide-y border-y ${dividerRule}`}>
-                  {AUDIENCE_LIST.map((item) => (
-                    <div key={item.index} className="grid grid-cols-1 gap-2 py-4 sm:grid-cols-12 sm:gap-4">
-                      <span className={`text-sm tabular-nums sm:col-span-2 sm:pt-0.5 ${mutedText}`}>
-                        {item.index}
-                      </span>
-                      <div className="sm:col-span-10">
-                        <h3 className="text-base font-medium">{item.title}</h3>
-                        <p className={`mt-1 text-sm leading-relaxed ${bodyText}`}>
-                          {item.detail}
-                        </p>
+                  {AUDIENCE_LIST.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <div key={item.index} className="flex items-start gap-3.5 py-4">
+                        <span
+                          className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${
+                            isDark
+                              ? 'border-[#f4f1ea]/15 bg-[#1b1a17] text-[#f4f1ea]'
+                              : 'border-[#141311]/12 bg-white text-[#141311]'
+                          }`}
+                        >
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-base font-medium">{item.title}</h3>
+                          <p className={`mt-1 text-sm leading-relaxed ${bodyText}`}>
+                            {item.detail}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -480,17 +546,20 @@ export function HomePage({
             </div>
 
             {/* 3-Step Guide */}
-            <div className={`mt-10 grid grid-cols-1 gap-8 border-t pt-8 md:grid-cols-3 ${borderRule}`}>
+            <div className={`mt-10 grid grid-cols-1 gap-6 border-t pt-8 md:grid-cols-3 ${borderRule}`}>
               {HOW_IT_WORKS_STEPS.map((item) => (
-                <div key={item.step} className="space-y-2.5">
-                  <span
-                    className={`inline-block border-b pb-1 text-sm font-medium tabular-nums ${
-                      isDark ? 'border-[#f4f1ea]' : 'border-[#141311]'
-                    }`}
-                  >
-                    {item.step}
-                  </span>
-                  <h3 className="text-lg font-medium tracking-[-0.01em]">{item.title}</h3>
+                <div key={item.step} className="space-y-3">
+                  <HowItWorksIllustration step={item.step} dark={isDark} />
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`inline-flex h-5 items-center rounded-full border px-2 text-[11px] font-semibold tabular-nums ${
+                        isDark ? 'border-[#f4f1ea]/25 text-[#f4f1ea]' : 'border-[#141311]/20 text-[#141311]'
+                      }`}
+                    >
+                      {item.step}
+                    </span>
+                    <h3 className="text-base font-semibold tracking-[-0.01em]">{item.title}</h3>
+                  </div>
                   <p className={`text-sm leading-relaxed ${bodyText}`}>{item.body}</p>
                 </div>
               ))}
@@ -518,13 +587,29 @@ export function HomePage({
                 </p>
               </div>
 
-              <div className="mt-5 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {SYSTEM_LIMITATIONS.map((lim) => (
-                  <div key={lim.label}>
-                    <h4 className="text-sm font-semibold">{lim.label}</h4>
-                    <p className={`mt-1 text-sm leading-relaxed ${bodyText}`}>{lim.detail}</p>
-                  </div>
-                ))}
+              <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {SYSTEM_LIMITATIONS.map((lim) => {
+                  const Icon = lim.icon;
+                  return (
+                    <div key={lim.label} className="flex items-start gap-3">
+                      <span
+                        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
+                          isDark
+                            ? 'border-[#f4f1ea]/15 bg-[#252320] text-[#f4f1ea]'
+                            : 'border-[#141311]/12 bg-white text-[#141311]'
+                        }`}
+                      >
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-semibold">{lim.label}</h4>
+                        <p className={`mt-1 text-xs leading-relaxed sm:text-sm ${bodyText}`}>
+                          {lim.detail}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               <div className={`mt-6 flex flex-wrap items-center justify-between gap-3 border-t pt-4 ${borderRule}`}>
