@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { AlertTriangle, Check, Frame, Palette, RotateCcw, Sparkles } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, Frame, Palette, RotateCcw, Sparkles } from 'lucide-react';
 import {
   ACCENT_PRESETS,
   CAPTION_MODE_META,
@@ -40,7 +40,7 @@ interface GalleryStyleControlsProps {
   values: GalleryStyleValues;
   onChange: <K extends keyof GalleryStyleValues>(key: K, value: GalleryStyleValues[K]) => void;
   onApplyPalette?: (palette: GalleryPalettePreset) => void;
-  section?: 'all' | 'colors' | 'layout';
+  section?: 'all' | 'colors' | 'layout' | 'hero' | 'framing';
   previewTitle?: string;
   previewBrand?: string;
   showMiniPreview?: boolean;
@@ -191,14 +191,16 @@ export function GalleryStyleControls({
     sanitizeHexColor(values.accentColor) === p.accentColor;
 
   const showColors = section === 'all' || section === 'colors';
-  const showLayout = section === 'all' || section === 'layout';
+  const showHero = section === 'all' || section === 'layout' || section === 'hero';
+  const showFraming = section === 'all' || section === 'layout' || section === 'framing';
+  const showLayout = showHero || showFraming;
 
   return (
     <div
       className={`space-y-4 rounded-xl border p-4 sm:col-span-2 ${
         dark
           ? 'border-[#f4f1ea]/15 bg-[#161513] text-[#f4f1ea]'
-          : 'border-stone-200 bg-white text-slate-900'
+          : 'border-stone-200 bg-stone-50/40 text-slate-900'
       }`}
     >
       {showColors && (
@@ -293,14 +295,17 @@ export function GalleryStyleControls({
             </div>
           </div>
 
-          {/* Custom Whole-Gallery Color Pickers */}
-          <div className="space-y-2">
-            <span
-              className={`block text-xs font-medium ${dark ? 'text-[#f4f1ea]/80' : 'text-slate-700'}`}
-            >
-              Custom Gallery Colors
-            </span>
-            <div className="grid grid-cols-1 gap-2">
+          {/* Custom Whole-Gallery Color Pickers (Collapsible for clean sidebar) */}
+          <details
+            className={`group rounded-xl border ${
+              dark ? 'border-[#f4f1ea]/12 bg-[#1a1916]' : 'border-stone-200 bg-white'
+            }`}
+          >
+            <summary className="flex items-center justify-between gap-2 px-3.5 py-2.5 text-xs font-semibold select-none">
+              <span>Custom Hex Colors (Background, Surface &amp; Ink)</span>
+              <ChevronDown className="h-3.5 w-3.5 opacity-60 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="grid grid-cols-1 gap-2 border-t border-stone-200/70 p-3">
               <ColorControlRow
                 label="Gallery Background"
                 hint="Auto (from theme)"
@@ -336,7 +341,7 @@ export function GalleryStyleControls({
                 dark={dark}
               />
             </div>
-          </div>
+          </details>
 
           {/* Accent Color */}
           <div>
@@ -428,19 +433,22 @@ export function GalleryStyleControls({
 
       {showLayout && (
         <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Frame className={`h-4 w-4 ${dark ? 'text-[#f4f1ea]/80' : 'text-slate-700'}`} />
-            <h3
-              className={`text-xs font-semibold tracking-wide uppercase ${
-                dark ? 'text-[#f4f1ea]' : 'text-slate-800'
-              }`}
-            >
-              Typography, Header & Photo Framing
-            </h3>
-          </div>
+          {showFraming && (
+            <div className="flex items-center gap-2">
+              <Frame className={`h-4 w-4 ${dark ? 'text-[#f4f1ea]/80' : 'text-slate-700'}`} />
+              <h3
+                className={`text-xs font-semibold tracking-wide uppercase ${
+                  dark ? 'text-[#f4f1ea]' : 'text-slate-800'
+                }`}
+              >
+                Typography &amp; Photo Framing
+              </h3>
+            </div>
+          )}
 
           {/* Typography Presets */}
-          <div>
+          {showFraming && (
+            <div>
             <span
               className={`block text-xs font-medium ${dark ? 'text-[#f4f1ea]/80' : 'text-slate-700'}`}
             >
@@ -449,7 +457,7 @@ export function GalleryStyleControls({
             <div
               role="radiogroup"
               aria-label="Typography Preset"
-              className={`mt-1.5 grid grid-cols-1 gap-2 ${compact ? 'sm:grid-cols-2' : 'sm:grid-cols-2'}`}
+              className="mt-1.5 grid grid-cols-1 gap-2 sm:grid-cols-2"
             >
               {FONT_LIST.map((preset) => {
                 const selected = values.fontPreset === preset.id;
@@ -470,7 +478,7 @@ export function GalleryStyleControls({
                         : `${
                             selected
                               ? 'border-slate-900 bg-slate-900/5 ring-1 ring-slate-900'
-                              : 'border-stone-200 bg-stone-50/60 hover:border-stone-300 hover:bg-stone-100/70'
+                              : 'border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-100/70'
                           } focus-visible:outline-slate-900`
                     }`}
                   >
@@ -502,19 +510,21 @@ export function GalleryStyleControls({
                 );
               })}
             </div>
-          </div>
+            </div>
+          )}
 
           {/* Hero Style */}
-          <div>
+          {showHero && (
+            <div>
             <span
               className={`block text-xs font-medium ${dark ? 'text-[#f4f1ea]/80' : 'text-slate-700'}`}
             >
-              Hero Header Style
+              Cover Hero Style
             </span>
             <div
               role="radiogroup"
-              aria-label="Hero Header Style"
-              className="mt-1.5 grid grid-cols-2 gap-1.5 sm:grid-cols-4"
+              aria-label="Cover Hero Style"
+              className="mt-1.5 grid grid-cols-2 gap-2"
             >
               {HERO_LIST.map((opt) => {
                 const selected = values.heroStyle === opt.id;
@@ -525,19 +535,19 @@ export function GalleryStyleControls({
                     role="radio"
                     aria-checked={selected}
                     onClick={() => onChange('heroStyle', opt.id)}
-                    className={`rounded-lg border px-2.5 py-2 text-left transition ${
+                    className={`rounded-xl border px-3 py-2.5 text-left transition ${
                       dark
                         ? selected
                           ? 'border-[#f4f1ea] bg-[#f4f1ea]/10 ring-1 ring-[#f4f1ea]'
                           : 'border-[#f4f1ea]/15 bg-[#1c1b18] hover:border-[#f4f1ea]/30'
                         : selected
                           ? 'border-slate-900 bg-slate-900/5 ring-1 ring-slate-900'
-                          : 'border-stone-200 bg-stone-50/70 hover:border-stone-300'
+                          : 'border-stone-200 bg-white hover:border-stone-300'
                     }`}
                   >
                     <span className="block text-xs font-semibold">{opt.label}</span>
                     <span
-                      className={`block text-[10px] ${
+                      className={`mt-0.5 block text-[10px] ${
                         dark ? 'text-[#f4f1ea]/55' : 'text-slate-500'
                       }`}
                     >
@@ -547,10 +557,12 @@ export function GalleryStyleControls({
                 );
               })}
             </div>
-          </div>
+            </div>
+          )}
 
           {/* Card Frame & Captions */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {showFraming && (
+            <div className="space-y-3">
             <div>
               <span
                 className={`block text-xs font-medium ${dark ? 'text-[#f4f1ea]/80' : 'text-slate-700'}`}
@@ -573,7 +585,7 @@ export function GalleryStyleControls({
                       role="radio"
                       aria-checked={selected}
                       onClick={() => onChange('cardStyle', opt.id)}
-                      className={`min-h-[34px] rounded-md px-1 text-[11px] font-medium transition ${
+                      className={`min-h-[34px] rounded-md px-2 text-[11px] font-medium transition ${
                         dark
                           ? selected
                             ? 'bg-[#f4f1ea] text-[#141311] shadow-2xs'
@@ -594,7 +606,7 @@ export function GalleryStyleControls({
               <span
                 className={`block text-xs font-medium ${dark ? 'text-[#f4f1ea]/80' : 'text-slate-700'}`}
               >
-                Filenames & Captions
+                Filenames &amp; Captions
               </span>
               <div
                 role="radiogroup"
@@ -628,10 +640,12 @@ export function GalleryStyleControls({
                 })}
               </div>
             </div>
-          </div>
+            </div>
+          )}
 
           {/* Spacing & Corner Radius */}
-          <div className={`grid grid-cols-1 gap-4 ${compact ? '' : 'md:grid-cols-2'}`}>
+          {showFraming && (
+            <div className={`grid grid-cols-1 gap-4 ${compact ? '' : 'md:grid-cols-2'}`}>
             <div>
               <span
                 className={`block text-xs font-medium ${dark ? 'text-[#f4f1ea]/80' : 'text-slate-700'}`}
@@ -709,7 +723,8 @@ export function GalleryStyleControls({
                 })}
               </div>
             </div>
-          </div>
+            </div>
+          )}
         </div>
       )}
 

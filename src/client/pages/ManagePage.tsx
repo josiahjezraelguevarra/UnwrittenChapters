@@ -149,6 +149,7 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
   const [previewViewport, setPreviewViewport] = useState<'desktop' | 'mobile'>('desktop');
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'design' | 'access'>('design');
+  const [designSection, setDesignSection] = useState<'layout' | 'colors' | 'framing'>('layout');
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -1026,15 +1027,50 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
 
               {activeTab === 'design' && (
                 <div className="space-y-4">
-                  <CustomSelect
-                    id="m-layout"
-                    label="Photo Layout"
-                    value={layout}
-                    options={LAYOUT_SELECT_OPTIONS}
-                    onChange={setLayout}
-                  />
+                  {/* Organized Design Sub-Navigation */}
+                  <div
+                    role="group"
+                    aria-label="Design categories"
+                    className="grid grid-cols-3 gap-1 rounded-lg border border-stone-200 bg-stone-50 p-1"
+                  >
+                    {(
+                      [
+                        ['layout', 'Layout & Hero'],
+                        ['colors', 'Colors'],
+                        ['framing', 'Frames & Type']
+                      ] as const
+                    ).map(([secId, label]) => {
+                      const active = designSection === secId;
+                      return (
+                        <button
+                          key={secId}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => setDesignSection(secId)}
+                          className={`min-h-[34px] rounded-md px-2 text-xs font-semibold transition ${
+                            active
+                              ? 'bg-slate-900 text-white shadow-2xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {designSection === 'layout' && (
+                    <CustomSelect
+                      id="m-layout"
+                      label="Photo Layout"
+                      value={layout}
+                      options={LAYOUT_SELECT_OPTIONS}
+                      onChange={setLayout}
+                    />
+                  )}
 
                   <GalleryStyleControls
+                    section={designSection === 'layout' ? 'hero' : designSection}
                     values={{
                       theme,
                       fontPreset,
@@ -1239,15 +1275,15 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
                       type="button"
                       aria-label={`Preview ${label} layout`}
                       aria-pressed={layout === mode}
+                      title={`${label} layout`}
                       onClick={() => setLayout(mode)}
-                      className={`inline-flex min-h-[30px] items-center gap-1 rounded-md px-2 text-xs font-medium transition ${
+                      className={`inline-flex min-h-[30px] min-w-[30px] items-center justify-center rounded-md px-1.5 text-xs font-medium transition ${
                         layout === mode
                           ? 'bg-slate-900 text-white'
                           : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
                       <Icon className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">{label}</span>
                     </button>
                   ))}
                 </div>
