@@ -107,7 +107,9 @@ export function HomePage({
   usePageSeo({
     title: `${config.appName} — Free Google Drive Client Photo Galleries`,
     description:
-      'Turn any public Google Drive folder into a shareable client photo and video gallery. Free hosting, zero accounts, password protection, favorites, and batch ZIP downloads.',
+      'Turn any public Google Drive folder into a client-ready photo and video gallery. Free hosting, no accounts, password locks, favorites & ZIPs.',
+    ogDescription:
+      'Turn public Google Drive folders into free client photo galleries with password locks, favorites & ZIP downloads.',
     robots: 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
     canonicalPath: '/'
   });
