@@ -918,4 +918,77 @@ describe('Gallery API & Media Proxy security', () => {
     expect(okBody.gallery.allowDownload).toBe(false);
     expect(okBody.gallery.sourceCount).toBe(1);
   });
+
+  it('performs zero KV writes on view/like/media and survives KV write quota exhaustion', async () => {
+    const createRes = await app.request(
+      '/api/galleries',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driveUrl: 'https://drive.google.com/drive/folders/folderABC12345'
+        })
+      },
+      env
+    );
+    expect(createRes.status).toBe(201);
+    const created = (await createRes.json()) as { slug: string };
+
+    const putSpy = vi.spyOn(env.CACHE, 'put');
+
+    const viewRes = await app.request(`/api/galleries/${created.slug}`, {}, env);
+    expect(viewRes.status).toBe(200);
+    const viewBody = (await viewRes.json()) as { items: Array<{ id: string }> };
+    const itemId = viewBody.items[0].id;
+
+    const likeRes = await app.request(
+      `/api/galleries/${created.slug}/likes`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId: itemId, visitorId: 'visitor_12345678' })
+      },
+      env
+    );
+    expect(likeRes.status).toBe(200);
+
+    const mediaRes = await app.request(
+      `/api/media/${created.slug}/${itemId}?variant=thumb&w=800`,
+      {},
+      env
+    );
+    expect(mediaRes.status).toBe(200);
+
+    // Zero KV writes for high-volume view, like, and media requests
+    expect(putSpy).not.toHaveBeenCalled();
+
+    // Simulate Cloudflare KV daily write quota exhaustion on low-volume create/unlock
+    putSpy.mockRejectedValue(new Error('KV put() limit exceeded for the day'));
+
+    const resilientCreate = await app.request(
+      '/api/galleries',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driveUrl: 'https://drive.google.com/drive/folders/folderABC12345',
+          password: 'secret-password'
+        })
+      },
+      env
+    );
+    expect(resilientCreate.status).toBe(201);
+    const created2 = (await resilientCreate.json()) as { slug: string };
+
+    const resilientUnlock = await app.request(
+      `/api/galleries/${created2.slug}/unlock`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'secret-password' })
+      },
+      env
+    );
+    expect(resilientUnlock.status).toBe(200);
+  });
 });

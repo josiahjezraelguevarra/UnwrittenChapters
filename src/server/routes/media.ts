@@ -12,7 +12,7 @@ import {
   isValidRangeHeader,
   isValidSlugParam
 } from '../security';
-import { checkRateLimit, getMediaManifest } from '../storage';
+import { checkEdgeRateLimit, getMediaManifest } from '../storage';
 import type { Env } from '../types';
 import { getSigningSecret, unlockCookieName } from './galleries';
 
@@ -42,7 +42,7 @@ mediaRouter.get('/media/:slug/:fileId', async (c) => {
   }
 
   const ip = c.req.header('cf-connecting-ip')?.trim() || 'unknown';
-  const mediaAllowed = await checkRateLimit(c.env.CACHE, `rl:media:${ip}`, 600, 60);
+  const mediaAllowed = checkEdgeRateLimit(`rl:media:${ip}`, 600, 60);
   if (!mediaAllowed) {
     return c.json({ error: 'Too many media requests. Please slow down.' }, 429);
   }

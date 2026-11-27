@@ -62,6 +62,7 @@ import {
   sanitizeControlChars
 } from '../security';
 import {
+  checkEdgeRateLimit,
   checkRateLimit,
   getGalleryBySlug,
   invalidateGalleryCache,
@@ -381,7 +382,6 @@ async function performGalleryDriveSync(env: Env, row: GalleryRow) {
     )
     .run();
 
-  await invalidateGalleryCache(env.CACHE, row.slug);
   const updated = await getGalleryBySlug(env.DB, row.slug);
   if (updated) await saveManifestCache(env.CACHE, updated);
 
@@ -708,7 +708,7 @@ galleriesRouter.get('/galleries/:slug', async (c) => {
   }
 
   const ip = getClientIp(c);
-  const viewAllowed = await checkRateLimit(c.env.CACHE, `rl:view:${ip}`, 180, 300);
+  const viewAllowed = checkEdgeRateLimit(`rl:view:${ip}`, 180, 300);
   if (!viewAllowed) {
     return c.json({ error: 'Too many requests. Please slow down.', code: 'RATE_LIMITED' }, 429);
   }
@@ -862,7 +862,7 @@ galleriesRouter.post('/galleries/:slug/likes', async (c) => {
   }
 
   const ip = getClientIp(c);
-  const allowed = await checkRateLimit(c.env.CACHE, `rl:like:${slug}:${ip}`, 120, 60);
+  const allowed = checkEdgeRateLimit(`rl:like:${slug}:${ip}`, 120, 60);
   if (!allowed) {
     return c.json({ error: 'Too many favorite actions. Please slow down.', code: 'RATE_LIMITED' }, 429);
   }
@@ -1210,7 +1210,6 @@ galleriesRouter.patch('/galleries/:slug/manage', async (c) => {
     )
     .run();
 
-  await invalidateGalleryCache(c.env.CACHE, row.slug);
   let updated = await getGalleryBySlug(c.env.DB, row.slug);
   let syncResult: Awaited<ReturnType<typeof performGalleryDriveSync>> | null = null;
   if (updated && sourcesChanged) {
