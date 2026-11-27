@@ -14,10 +14,12 @@
     "deploy": "vite build && wrangler deploy"
   },
   "dependencies": {
+    "@types/qrcode": "^1.5.6",
     "client-zip": "^2.4.5",
     "hono": "^4.7.4",
     "lucide-react": "^0.475.0",
     "photoswipe": "^5.4.4",
+    "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

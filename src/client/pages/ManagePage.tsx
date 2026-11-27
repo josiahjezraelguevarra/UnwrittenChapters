@@ -15,6 +15,7 @@ import {
   Minimize2,
   Monitor,
   Palette,
+  QrCode,
   RefreshCw,
   RotateCcw,
   Rows3,
@@ -44,6 +45,7 @@ import {
   type GalleryStyleValues
 } from '../components/GalleryStyleControls';
 import { GallerySurface, type MediaFilter } from '../components/GallerySurface';
+import { QrShareModal } from '../components/QrShareModal';
 import { SupportErrorAlert } from '../components/SupportErrorAlert';
 import { ToggleField } from '../components/ToggleField';
 import {
@@ -133,6 +135,7 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
   const [copiedLightroom, setCopiedLightroom] = useState(false);
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const deleteDialogRef = useRef<HTMLDialogElement>(null);
 
@@ -691,6 +694,14 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
             >
               {copiedShare ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               <span>{copiedShare ? 'Copied Share' : 'Copy Share Link'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setQrOpen(true)}
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-3.5 text-xs font-semibold hover:bg-stone-100"
+            >
+              <QrCode className="h-3.5 w-3.5" />
+              <span>QR &amp; Card</span>
             </button>
             {sessionManageToken && (
               <button
@@ -1390,6 +1401,16 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
           </button>
         </div>
       </dialog>
+
+      <QrShareModal
+        open={qrOpen}
+        onClose={() => setQrOpen(false)}
+        shareUrl={`${window.location.origin}/g/${slug}`}
+        slug={slug}
+        title={title || data.gallery.title}
+        brandName={brandName}
+        hasPassword={data.gallery.hasPassword}
+      />
     </div>
   );
 }
