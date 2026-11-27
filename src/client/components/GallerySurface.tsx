@@ -222,33 +222,14 @@ export function GallerySurface({
 
   const renderBrandHeader = () => (
     <div className="flex flex-wrap items-center justify-between gap-4">
-      {gallery.brandName ? (
-        gallery.brandUrl ? (
-          <a
-            href={gallery.brandUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={previewMode ? (e) => e.preventDefault() : undefined}
-            className="inline-flex items-center gap-1.5 text-sm font-semibold tracking-wide uppercase opacity-85 hover:opacity-100"
-          >
-            <span>{gallery.brandName}</span>
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        ) : (
-          <span className="text-sm font-semibold tracking-wide uppercase opacity-85">
-            {gallery.brandName}
-          </span>
-        )
-      ) : (
-        <span className="inline-flex items-center gap-2 text-sm font-semibold tracking-wide uppercase opacity-85">
-          <img
-            src="/logo.svg"
-            alt=""
-            className="h-6 w-6 object-contain"
-          />
-          <span>{appName}</span>
-        </span>
-      )}
+      <span className="inline-flex items-center gap-2 text-sm font-semibold tracking-wide uppercase opacity-85">
+        <img
+          src="/logo.svg"
+          alt=""
+          className="h-6 w-6 object-contain"
+        />
+        <span>{appName}</span>
+      </span>
 
       <button
         type="button"
@@ -265,6 +246,28 @@ export function GallerySurface({
       </button>
     </div>
   );
+
+  const renderStudioEyebrow = (centered = false) => {
+    if (!gallery.brandName) return null;
+    const baseClass = `inline-flex items-center gap-1.5 text-xs font-semibold tracking-[0.2em] uppercase opacity-85 ${
+      centered ? 'mb-3 justify-center' : 'mt-5 mb-2'
+    }`;
+    if (gallery.brandUrl) {
+      return (
+        <a
+          href={gallery.brandUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={previewMode ? (e) => e.preventDefault() : undefined}
+          className={`${baseClass} underline-offset-4 transition hover:underline hover:opacity-100`}
+        >
+          <span>{gallery.brandName}</span>
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      );
+    }
+    return <p className={baseClass}>{gallery.brandName}</p>;
+  };
 
   return (
     <div
@@ -316,11 +319,7 @@ export function GallerySurface({
           </div>
 
           <div className="relative z-10 mx-auto flex max-w-3xl flex-1 flex-col items-center justify-center px-5 py-10 text-center">
-            {gallery.brandName && (
-              <p className="mb-3 text-xs font-semibold tracking-[0.22em] uppercase opacity-80">
-                {gallery.brandName}
-              </p>
-            )}
+            {renderStudioEyebrow(true)}
             <h1
               className={`font-bold tracking-tight ${
                 isMobilePreview
@@ -399,6 +398,7 @@ export function GallerySurface({
                 }`}
               >
                 <div className={isMobilePreview ? '' : 'md:col-span-7'}>
+                  {renderStudioEyebrow(false)}
                   <h1
                     className={`font-bold tracking-tight ${
                       isMobilePreview
@@ -445,8 +445,9 @@ export function GallerySurface({
               </div>
             ) : (
               <div>
+                {renderStudioEyebrow(false)}
                 <h1
-                  className={`mt-4 font-bold tracking-tight ${
+                  className={`${gallery.brandName ? 'mt-1' : 'mt-4'} font-bold tracking-tight ${
                     isMobilePreview
                       ? 'text-2xl'
                       : previewMode

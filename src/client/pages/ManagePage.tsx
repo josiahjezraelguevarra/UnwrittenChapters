@@ -53,8 +53,7 @@ import { SupportErrorAlert } from '../components/SupportErrorAlert';
 import { ToggleField } from '../components/ToggleField';
 import {
   EXPIRY_SELECT_OPTIONS,
-  LAYOUT_SELECT_OPTIONS,
-  THEME_SELECT_OPTIONS
+  LAYOUT_SELECT_OPTIONS
 } from '../config/galleryOptions';
 import {
   ApiError,
@@ -762,21 +761,6 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
               <span>View Gallery</span>
               <ExternalLink className="h-3.5 w-3.5" />
             </button>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={allowDownload}
-              onClick={() => setAllowDownload((v) => !v)}
-              title="Toggle client download permissions (remember to Save Changes)"
-              className={`inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition ${
-                allowDownload
-                  ? 'border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100'
-                  : 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100'
-              }`}
-            >
-              <Download className="h-3.5 w-3.5" />
-              <span>{allowDownload ? 'Downloads: On' : 'Downloads: Off'}</span>
-            </button>
           </div>
         </div>
       </header>
@@ -1048,14 +1032,6 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
                     value={layout}
                     options={LAYOUT_SELECT_OPTIONS}
                     onChange={setLayout}
-                  />
-
-                  <CustomSelect
-                    id="m-theme"
-                    label="Gallery Color Theme"
-                    value={theme}
-                    options={THEME_SELECT_OPTIONS}
-                    onChange={setTheme}
                   />
 
                   <GalleryStyleControls
