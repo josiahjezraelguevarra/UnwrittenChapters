@@ -1,6 +1,13 @@
 import { useId } from 'react';
 import { AlertTriangle, Check, ChevronDown, Frame, Palette, RotateCcw, Sparkles } from 'lucide-react';
 import {
+  CardFrameIllustration,
+  CaptionModeIllustration,
+  CornerRadiusIllustration,
+  HeroStyleIllustration,
+  SpacingIllustration
+} from './StyleIllustrations';
+import {
   ACCENT_PRESETS,
   CAPTION_MODE_META,
   CARD_RADIUS_META,
@@ -434,15 +441,80 @@ export function GalleryStyleControls({
       {showLayout && (
         <div className="space-y-4">
           {showFraming && (
-            <div className="flex items-center gap-2">
-              <Frame className={`h-4 w-4 ${dark ? 'text-[#f4f1ea]/80' : 'text-slate-700'}`} />
-              <h3
-                className={`text-xs font-semibold tracking-wide uppercase ${
-                  dark ? 'text-[#f4f1ea]' : 'text-slate-800'
-                }`}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Frame className={`h-4 w-4 ${dark ? 'text-[#f4f1ea]/80' : 'text-slate-700'}`} />
+                <h3
+                  className={`text-xs font-semibold tracking-wide uppercase ${
+                    dark ? 'text-[#f4f1ea]' : 'text-slate-800'
+                  }`}
+                >
+                  Typography &amp; Photo Framing
+                </h3>
+              </div>
+
+              {/* Compact Mobile Live Swatch Preview (visible when main Preview is below the fold) */}
+              <div
+                aria-label="Compact framing preview"
+                className="rounded-xl border p-3 xl:hidden"
+                style={{
+                  backgroundColor: tokens.bg,
+                  color: tokens.fg,
+                  borderColor: tokens.border,
+                  fontFamily: fontMeta.bodyFamily
+                }}
               >
-                Typography &amp; Photo Framing
-              </h3>
+                <p
+                  className="truncate text-sm font-bold"
+                  style={{ fontFamily: fontMeta.headingFamily }}
+                >
+                  {previewTitle || 'Gallery Title'}
+                </p>
+                <div className="mt-2 grid grid-cols-3" style={{ gap: gapPx }}>
+                  {['from-amber-200 to-stone-300', 'from-rose-200 to-amber-100', 'from-slate-300 to-stone-200'].map(
+                    (grad, i) => (
+                      <div
+                        key={i}
+                        className="overflow-hidden"
+                        style={{
+                          borderRadius: previewRadius,
+                          backgroundColor:
+                            values.cardStyle === 'polaroid'
+                              ? '#ffffff'
+                              : values.cardStyle === 'clean'
+                                ? tokens.cardBg
+                                : tokens.surface,
+                          border:
+                            values.cardStyle === 'clean' ? 'none' : `1px solid ${tokens.border}`,
+                          padding:
+                            values.cardStyle === 'mat'
+                              ? '4px'
+                              : values.cardStyle === 'polaroid'
+                                ? '4px 4px 10px'
+                                : '0px',
+                          boxShadow:
+                            values.cardStyle === 'shadow'
+                              ? '0 4px 10px rgba(15,23,42,0.16)'
+                              : undefined
+                        }}
+                      >
+                        <div
+                          className={`aspect-[4/3] bg-gradient-to-br ${grad}`}
+                          style={{
+                            borderRadius:
+                              values.cardStyle === 'mat' || values.cardStyle === 'polaroid'
+                                ? '3px'
+                                : previewRadius
+                          }}
+                        />
+                        {values.captionMode === 'below' && values.cardStyle !== 'polaroid' && (
+                          <div className="mt-1 h-1 w-8 rounded-full bg-current opacity-35" />
+                        )}
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -535,7 +607,7 @@ export function GalleryStyleControls({
                     role="radio"
                     aria-checked={selected}
                     onClick={() => onChange('heroStyle', opt.id)}
-                    className={`rounded-xl border px-3 py-2.5 text-left transition ${
+                    className={`flex flex-col gap-2 rounded-xl border p-2 text-left transition ${
                       dark
                         ? selected
                           ? 'border-[#f4f1ea] bg-[#f4f1ea]/10 ring-1 ring-[#f4f1ea]'
@@ -545,14 +617,8 @@ export function GalleryStyleControls({
                           : 'border-stone-200 bg-white hover:border-stone-300'
                     }`}
                   >
-                    <span className="block text-xs font-semibold">{opt.label}</span>
-                    <span
-                      className={`mt-0.5 block text-[10px] ${
-                        dark ? 'text-[#f4f1ea]/55' : 'text-slate-500'
-                      }`}
-                    >
-                      {opt.tagline}
-                    </span>
+                    <HeroStyleIllustration mode={opt.id} />
+                    <span className="block text-center text-xs font-semibold">{opt.label}</span>
                   </button>
                 );
               })}
@@ -562,7 +628,7 @@ export function GalleryStyleControls({
 
           {/* Card Frame & Captions */}
           {showFraming && (
-            <div className="space-y-3">
+            <div className="space-y-4">
             <div>
               <span
                 className={`block text-xs font-medium ${dark ? 'text-[#f4f1ea]/80' : 'text-slate-700'}`}
@@ -572,9 +638,7 @@ export function GalleryStyleControls({
               <div
                 role="radiogroup"
                 aria-label="Photo Frame"
-                className={`mt-1.5 grid grid-cols-2 gap-1 rounded-lg border p-1 sm:grid-cols-3 ${
-                  dark ? 'border-[#f4f1ea]/15 bg-[#1c1b18]' : 'border-stone-200 bg-stone-100'
-                }`}
+                className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3"
               >
                 {CARD_STYLE_LIST.map((opt) => {
                   const selected = values.cardStyle === opt.id;
@@ -585,17 +649,18 @@ export function GalleryStyleControls({
                       role="radio"
                       aria-checked={selected}
                       onClick={() => onChange('cardStyle', opt.id)}
-                      className={`min-h-[34px] rounded-md px-2 text-[11px] font-medium transition ${
+                      className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 text-center transition ${
                         dark
                           ? selected
-                            ? 'bg-[#f4f1ea] text-[#141311] shadow-2xs'
-                            : 'text-[#f4f1ea]/65 hover:text-[#f4f1ea]'
+                            ? 'border-[#f4f1ea] bg-[#f4f1ea]/10 ring-1 ring-[#f4f1ea]'
+                            : 'border-[#f4f1ea]/15 bg-[#1c1b18] hover:border-[#f4f1ea]/30'
                           : selected
-                            ? 'bg-white text-slate-900 shadow-2xs'
-                            : 'text-slate-600 hover:text-slate-900'
+                            ? 'border-slate-900 bg-slate-900/5 ring-1 ring-slate-900'
+                            : 'border-stone-200 bg-white hover:border-stone-300'
                       }`}
                     >
-                      {opt.label}
+                      <CardFrameIllustration mode={opt.id} />
+                      <span className="text-[11px] font-semibold">{opt.label}</span>
                     </button>
                   );
                 })}
@@ -611,9 +676,7 @@ export function GalleryStyleControls({
               <div
                 role="radiogroup"
                 aria-label="Filenames and Captions"
-                className={`mt-1.5 grid grid-cols-3 gap-1 rounded-lg border p-1 ${
-                  dark ? 'border-[#f4f1ea]/15 bg-[#1c1b18]' : 'border-stone-200 bg-stone-100'
-                }`}
+                className="mt-1.5 grid grid-cols-3 gap-2"
               >
                 {CAPTION_LIST.map((opt) => {
                   const selected = values.captionMode === opt.id;
@@ -624,17 +687,18 @@ export function GalleryStyleControls({
                       role="radio"
                       aria-checked={selected}
                       onClick={() => onChange('captionMode', opt.id)}
-                      className={`min-h-[34px] rounded-md px-1 text-[11px] font-medium transition ${
+                      className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 text-center transition ${
                         dark
                           ? selected
-                            ? 'bg-[#f4f1ea] text-[#141311] shadow-2xs'
-                            : 'text-[#f4f1ea]/65 hover:text-[#f4f1ea]'
+                            ? 'border-[#f4f1ea] bg-[#f4f1ea]/10 ring-1 ring-[#f4f1ea]'
+                            : 'border-[#f4f1ea]/15 bg-[#1c1b18] hover:border-[#f4f1ea]/30'
                           : selected
-                            ? 'bg-white text-slate-900 shadow-2xs'
-                            : 'text-slate-600 hover:text-slate-900'
+                            ? 'border-slate-900 bg-slate-900/5 ring-1 ring-slate-900'
+                            : 'border-stone-200 bg-white hover:border-stone-300'
                       }`}
                     >
-                      {opt.label}
+                      <CaptionModeIllustration mode={opt.id} />
+                      <span className="text-[11px] font-semibold">{opt.label}</span>
                     </button>
                   );
                 })}
@@ -645,7 +709,7 @@ export function GalleryStyleControls({
 
           {/* Spacing & Corner Radius */}
           {showFraming && (
-            <div className={`grid grid-cols-1 gap-4 ${compact ? '' : 'md:grid-cols-2'}`}>
+            <div className="space-y-4">
             <div>
               <span
                 className={`block text-xs font-medium ${dark ? 'text-[#f4f1ea]/80' : 'text-slate-700'}`}
@@ -655,9 +719,7 @@ export function GalleryStyleControls({
               <div
                 role="radiogroup"
                 aria-label="Photo Spacing"
-                className={`mt-1.5 grid grid-cols-2 gap-1 rounded-lg border p-1 sm:grid-cols-4 ${
-                  dark ? 'border-[#f4f1ea]/15 bg-[#1c1b18]' : 'border-stone-200 bg-stone-100'
-                }`}
+                className="mt-1.5 grid grid-cols-4 gap-1.5"
               >
                 {GAP_LIST.map((opt) => {
                   const selected = values.gridGap === opt.id;
@@ -668,17 +730,18 @@ export function GalleryStyleControls({
                       role="radio"
                       aria-checked={selected}
                       onClick={() => onChange('gridGap', opt.id)}
-                      className={`min-h-[34px] rounded-md text-xs font-medium transition ${
+                      className={`flex flex-col items-center gap-1 rounded-xl border p-1.5 text-center transition ${
                         dark
                           ? selected
-                            ? 'bg-[#f4f1ea] text-[#141311] shadow-2xs'
-                            : 'text-[#f4f1ea]/65 hover:text-[#f4f1ea]'
+                            ? 'border-[#f4f1ea] bg-[#f4f1ea]/10 ring-1 ring-[#f4f1ea]'
+                            : 'border-[#f4f1ea]/15 bg-[#1c1b18] hover:border-[#f4f1ea]/30'
                           : selected
-                            ? 'bg-white text-slate-900 shadow-2xs'
-                            : 'text-slate-600 hover:text-slate-900'
+                            ? 'border-slate-900 bg-slate-900/5 ring-1 ring-slate-900'
+                            : 'border-stone-200 bg-white hover:border-stone-300'
                       }`}
                     >
-                      {opt.label}
+                      <SpacingIllustration mode={opt.id} />
+                      <span className="text-[11px] font-semibold">{opt.label}</span>
                     </button>
                   );
                 })}
@@ -694,9 +757,7 @@ export function GalleryStyleControls({
               <div
                 role="radiogroup"
                 aria-label="Corner Style"
-                className={`mt-1.5 grid grid-cols-3 gap-1 rounded-lg border p-1 ${
-                  dark ? 'border-[#f4f1ea]/15 bg-[#1c1b18]' : 'border-stone-200 bg-stone-100'
-                }`}
+                className="mt-1.5 grid grid-cols-3 gap-2"
               >
                 {RADIUS_LIST.map((opt) => {
                   const selected = values.cardRadius === opt.id;
@@ -707,17 +768,18 @@ export function GalleryStyleControls({
                       role="radio"
                       aria-checked={selected}
                       onClick={() => onChange('cardRadius', opt.id)}
-                      className={`min-h-[34px] rounded-md text-xs font-medium transition ${
+                      className={`flex flex-col items-center gap-1 rounded-xl border p-2 text-center transition ${
                         dark
                           ? selected
-                            ? 'bg-[#f4f1ea] text-[#141311] shadow-2xs'
-                            : 'text-[#f4f1ea]/65 hover:text-[#f4f1ea]'
+                            ? 'border-[#f4f1ea] bg-[#f4f1ea]/10 ring-1 ring-[#f4f1ea]'
+                            : 'border-[#f4f1ea]/15 bg-[#1c1b18] hover:border-[#f4f1ea]/30'
                           : selected
-                            ? 'bg-white text-slate-900 shadow-2xs'
-                            : 'text-slate-600 hover:text-slate-900'
+                            ? 'border-slate-900 bg-slate-900/5 ring-1 ring-slate-900'
+                            : 'border-stone-200 bg-white hover:border-stone-300'
                       }`}
                     >
-                      {opt.label}
+                      <CornerRadiusIllustration mode={opt.id} />
+                      <span className="text-[11px] font-semibold">{opt.label}</span>
                     </button>
                   );
                 })}
