@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import {
+  AlertCircle,
   ArrowDownRight,
   BookmarkCheck,
   Camera,
@@ -611,27 +612,63 @@ export function HomePage({
                   );
                 })}
               </div>
+            </div>
 
-              <div className={`mt-6 flex flex-wrap items-center justify-between gap-3 border-t pt-4 ${borderRule}`}>
-                <p className={`max-w-[68ch] text-xs leading-relaxed sm:text-sm ${bodyText}`}>
-                  <span className="font-semibold">Disclaimer:</span> Since {config.appName} is
-                  100% free with no subscriptions, its capacity and features are currently limited.
-                  If you&apos;d like to help expand this tool and raise those limits over time,
-                  you&apos;re welcome to support it with a donation.
-                </p>
-                <button
-                  type="button"
-                  onClick={onOpenDonate}
-                  className={`inline-flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition ${
+            {/* Standout Disclaimer Callout */}
+            <div
+              role="note"
+              aria-label="Free tool disclaimer"
+              className={`mt-5 flex flex-col justify-between gap-4 rounded-2xl border-2 p-5 sm:flex-row sm:items-center sm:p-6 ${
+                isDark
+                  ? 'border-amber-400/35 bg-amber-500/10 text-[#f4f1ea]'
+                  : 'border-amber-700/25 bg-amber-50/90 text-[#141311]'
+              }`}
+            >
+              <div className="flex items-start gap-3.5">
+                <span
+                  className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${
                     isDark
-                      ? 'border-[#f4f1ea]/20 text-[#f4f1ea] hover:bg-[#f4f1ea]/10'
-                      : 'border-[#141311]/20 bg-white text-[#141311] hover:bg-[#141311]/5'
+                      ? 'border-amber-400/30 bg-amber-400/15 text-amber-300'
+                      : 'border-amber-700/20 bg-amber-600/12 text-amber-800'
                   }`}
                 >
-                  <Heart className="h-3.5 w-3.5" />
-                  <span>Help expand this tool</span>
-                </button>
+                  <AlertCircle className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold tracking-wide uppercase ${
+                        isDark
+                          ? 'bg-amber-400/20 text-amber-200'
+                          : 'bg-amber-700/12 text-amber-900'
+                      }`}
+                    >
+                      Disclaimer
+                    </span>
+                    <h4 className="text-sm font-semibold sm:text-base">
+                      100% Free — Capacity &amp; Features Are Limited
+                    </h4>
+                  </div>
+                  <p className={`mt-1.5 max-w-[68ch] text-sm leading-relaxed ${bodyText}`}>
+                    Since {config.appName} has no subscriptions or paid tiers, album size and daily
+                    traffic are capped. Want higher limits and new features? Support the project
+                    with a voluntary donation.
+                  </p>
+                </div>
               </div>
+
+              <button
+                type="button"
+                onClick={onOpenDonate}
+                className={`inline-flex min-h-[42px] shrink-0 items-center justify-center gap-2 rounded-full px-5 text-xs font-semibold shadow-2xs transition sm:text-sm ${
+                  isDark
+                    ? 'bg-[#f4f1ea] text-[#141311] hover:bg-[#e5e0d5]'
+                    : 'bg-[#141311] text-[#f8f6f2] hover:bg-[#2a2824]'
+                }`}
+              >
+                <Heart className="h-4 w-4" />
+                <span>Donate to expand</span>
+              </button>
             </div>
           </section>
 
