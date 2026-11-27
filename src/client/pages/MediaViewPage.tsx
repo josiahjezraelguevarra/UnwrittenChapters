@@ -422,6 +422,11 @@ export function MediaViewPage({ slug, fileId, config, onNavigate }: MediaViewPag
               src={mediaFullUrl(slug, currentItem.id, false)}
               poster={mediaThumbUrl(slug, currentItem.id, 1200)}
               controls
+              controlsList={data.gallery.allowDownload ? undefined : 'nodownload'}
+              disablePictureInPicture={!data.gallery.allowDownload}
+              onContextMenu={
+                data.gallery.allowDownload ? undefined : (e) => e.preventDefault()
+              }
               autoPlay
               playsInline
               className="max-h-[74vh] w-full max-w-5xl rounded-xl bg-black"
@@ -432,12 +437,16 @@ export function MediaViewPage({ slug, fileId, config, onNavigate }: MediaViewPag
                 key={currentItem.id}
                 src={mediaFullUrl(slug, currentItem.id, false)}
                 alt={currentItem.name}
+                draggable={data.gallery.allowDownload}
+                onContextMenu={
+                  data.gallery.allowDownload ? undefined : (e) => e.preventDefault()
+                }
                 onClick={() => setZoomed((z) => !z)}
-                className={
+                className={`${!data.gallery.allowDownload ? 'select-none ' : ''}${
                   zoomed
                     ? 'mx-auto h-auto max-w-none cursor-zoom-out rounded-lg'
                     : 'max-h-[74vh] w-auto max-w-full cursor-zoom-in rounded-lg object-contain'
-                }
+                }`}
               />
             </div>
           )}

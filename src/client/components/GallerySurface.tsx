@@ -811,8 +811,13 @@ export function GallerySurface({
               return (
                 <article key={item.id} className={cardClass} style={articleStyle}>
                   <div
-                    className={mediaWrapperClass}
+                    className={`${mediaWrapperClass} ${!gallery.allowDownload ? 'select-none' : ''}`}
                     style={{ borderRadius: innerMediaRadius }}
+                    onContextMenu={
+                      !previewMode && !gallery.allowDownload
+                        ? (e) => e.preventDefault()
+                        : undefined
+                    }
                   >
                     {item.kind === 'image' ? (
                       <button
@@ -826,6 +831,7 @@ export function GallerySurface({
                           alt={item.name}
                           loading="lazy"
                           decoding="async"
+                          draggable={gallery.allowDownload}
                           style={layout === 'justified' ? undefined : { aspectRatio }}
                           className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
                         />
@@ -847,6 +853,7 @@ export function GallerySurface({
                           alt={item.name}
                           loading="lazy"
                           decoding="async"
+                          draggable={gallery.allowDownload}
                           className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
                         />
                         <span className="absolute inset-0 flex items-center justify-center bg-black/20 transition duration-200 group-hover:bg-black/35">
