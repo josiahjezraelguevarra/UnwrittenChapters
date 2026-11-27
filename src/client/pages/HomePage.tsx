@@ -78,22 +78,32 @@ const SYSTEM_LIMITATIONS = [
   {
     label: 'Public Drive Link Required',
     detail:
-      'Folders must be set to "Anyone with the link → Viewer". Private sign-in folders cannot be scanned.'
+      'Folders must be set to "Anyone with the link → Viewer". Private folders that require signing in cannot be loaded.'
   },
   {
-    label: 'Album & Folder Caps',
+    label: 'Album & Folder Limits',
     detail:
-      'Supports up to 3 Drive links, 3 nested levels, 40 subfolders, and 2,000 photo/video items per album.'
+      'Supports up to 3 Drive links, 3 folder levels deep, 40 subfolders, and 2,000 photo or video items per album.'
+  },
+  {
+    label: 'Sync Timing & Busy-Hour Pauses',
+    detail:
+      'Auto-sync checks for Drive changes about every 6 hours (or anytime via Re-sync). During busy times, free daily limits may briefly pause loading or syncing.'
+  },
+  {
+    label: 'Large ZIPs & Photo Tools',
+    detail:
+      'ZIP downloads and the free Photo Tools (up to 40 photos per batch) run on your own device, so huge albums may feel slow on older phones.'
   },
   {
     label: 'Files Stay on Google Drive',
     detail:
-      'Nothing is copied to our servers—deleting or unsharing files in Drive removes access automatically.'
+      'We do not keep copies of your media—deleting, moving, or unsharing files in Drive (or an expired link) removes access here automatically.'
   },
   {
-    label: 'Bookmark Your Manage Link',
+    label: 'No Accounts or Link Recovery',
     detail:
-      'Because there are no accounts, your secret Manage link is the sole key to edit or delete a gallery.'
+      'There are no sign-ins or recovery emails. Bookmark your secret Manage link right away—it is the only key to edit or delete a gallery.'
   }
 ];
 
@@ -494,16 +504,21 @@ export function HomePage({
                   : 'border-[#141311]/15 bg-[#f1ede5]'
               }`}
             >
-              <div className={`flex flex-wrap items-baseline justify-between gap-2 border-b pb-4 ${borderRule}`}>
-                <h3 className="text-xl font-semibold tracking-tight sm:text-2xl">
-                  Free-tool limitations
-                </h3>
-                <span className={`text-sm ${mutedText}`}>
-                  Transparent specs
-                </span>
+              <div className={`border-b pb-4 ${borderRule}`}>
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h3 className="text-xl font-semibold tracking-tight sm:text-2xl">
+                    Free-tool limitations
+                  </h3>
+                  <span className={`text-sm ${mutedText}`}>
+                    Good to know
+                  </span>
+                </div>
+                <p className={`mt-1.5 text-sm leading-relaxed ${bodyText}`}>
+                  Everything here runs on free tools so it stays free for every creator—which means a few practical limits apply.
+                </p>
               </div>
 
-              <div className="mt-5 grid grid-cols-1 gap-6 sm:grid-cols-2">
+              <div className="mt-5 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {SYSTEM_LIMITATIONS.map((lim) => (
                   <div key={lim.label}>
                     <h4 className="text-sm font-semibold">{lim.label}</h4>
