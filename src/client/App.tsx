@@ -6,6 +6,7 @@ import { fetchAppConfig } from './lib/api';
 import { GalleryPage } from './pages/GalleryPage';
 import { HomePage } from './pages/HomePage';
 import { ManagePage } from './pages/ManagePage';
+import { MediaViewPage } from './pages/MediaViewPage';
 
 const DEFAULT_CONFIG: AppPublicConfig = {
   appName: 'UnwrittenChapters',
@@ -66,12 +67,20 @@ export function App() {
   }, []);
 
   const manageMatch = pathname.match(/^\/g\/([a-zA-Z0-9_-]+)\/manage\/?$/);
+  const mediaViewMatch = pathname.match(/^\/g\/([a-zA-Z0-9_-]+)\/view\/([a-zA-Z0-9_-]+)\/?$/);
   const galleryMatch = pathname.match(/^\/g\/([a-zA-Z0-9_-]+)\/?$/);
 
   return (
     <>
       {manageMatch ? (
         <ManagePage slug={manageMatch[1]} onNavigate={navigate} />
+      ) : mediaViewMatch ? (
+        <MediaViewPage
+          slug={mediaViewMatch[1]}
+          fileId={mediaViewMatch[2]}
+          config={config}
+          onNavigate={navigate}
+        />
       ) : galleryMatch ? (
         <GalleryPage
           slug={galleryMatch[1]}
@@ -94,7 +103,7 @@ export function App() {
         onClose={() => setDonateOpen(false)}
         appName={config.appName}
         donateUrl={config.donateUrl}
-        dark={!manageMatch && !galleryMatch && homeTheme === 'dark'}
+        dark={!manageMatch && !mediaViewMatch && !galleryMatch && homeTheme === 'dark'}
       />
     </>
   );

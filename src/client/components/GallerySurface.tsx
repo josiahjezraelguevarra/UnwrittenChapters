@@ -76,6 +76,7 @@ export interface GallerySurfaceProps {
   onBatchDownload?: () => void;
   onCancelZip?: () => void;
   onToggleLike?: (fileId: string) => void;
+  onOpenItem?: (item: MediaItem) => void;
   onOpenVideo?: (item: MediaItem) => void;
   onOpenDonate?: () => void;
   onOpenReport?: () => void;
@@ -108,6 +109,7 @@ export function GallerySurface({
   onBatchDownload,
   onCancelZip,
   onToggleLike,
+  onOpenItem,
   onOpenVideo,
   onOpenDonate,
   onOpenReport,
@@ -606,7 +608,6 @@ export function GallerySurface({
               const liked = visitorLikes.has(item.id);
               const count = likeCounts[item.id] || 0;
               const thumbSrc = resolveThumb(item.id, previewMode ? 600 : 800);
-              const fullSrc = previewImageMap?.[item.id] || mediaFullUrl(slug, item.id, false);
               const aspectRatio =
                 layout === 'grid' ? '1 / 1' : `${item.width || 4} / ${item.height || 3}`;
 
@@ -653,12 +654,9 @@ export function GallerySurface({
                     {item.kind === 'image' ? (
                       <button
                         type="button"
-                        data-pswp-photo={previewMode ? undefined : 'true'}
-                        data-pswp-src={previewMode ? undefined : fullSrc}
-                        data-pswp-width={item.width || 1600}
-                        data-pswp-height={item.height || 1200}
+                        onClick={previewMode ? undefined : () => onOpenItem?.(item)}
                         aria-label={`View ${item.name}`}
-                        className="block h-full w-full cursor-zoom-in text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+                        className="block h-full w-full cursor-pointer text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
                       >
                         <img
                           src={thumbSrc}
@@ -672,7 +670,11 @@ export function GallerySurface({
                     ) : (
                       <button
                         type="button"
-                        onClick={previewMode ? undefined : () => onOpenVideo?.(item)}
+                        onClick={
+                          previewMode
+                            ? undefined
+                            : () => (onOpenItem ? onOpenItem(item) : onOpenVideo?.(item))
+                        }
                         aria-label={`Play video ${item.name}`}
                         style={layout === 'justified' ? undefined : { aspectRatio }}
                         className="relative block h-full w-full overflow-hidden text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"

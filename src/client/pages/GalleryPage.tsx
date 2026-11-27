@@ -6,37 +6,27 @@ import {
   useState,
   type FormEvent
 } from 'react';
-import PhotoSwipeLightbox from 'photoswipe/lightbox';
 import {
   AlertTriangle,
-  Download,
-  Lock,
   RefreshCw,
   X
 } from 'lucide-react';
 import type {
   AppPublicConfig,
   GalleryLayout,
-  GalleryViewResponse,
-  MediaItem
+  GalleryViewResponse
 } from '../../shared/types';
-import {
-  FONT_PRESETS,
-  resolveGalleryThemeTokens
-} from '../../shared/customization';
 import { SUPPORT_EMAIL, buildSupportMailto } from '../../shared/contact';
 import { CustomSelect } from '../components/CustomSelect';
+import { GalleryLockScreen } from '../components/GalleryLockScreen';
 import { GallerySurface, type MediaFilter } from '../components/GallerySurface';
 import { TurnstileWidget } from '../components/TurnstileWidget';
 import { REPORT_REASON_OPTIONS } from '../config/galleryOptions';
 import {
   ApiError,
   fetchGalleryView,
-  mediaFullUrl,
-  mediaThumbUrl,
   reportGallery,
-  toggleLike,
-  unlockGallery
+  toggleLike
 } from '../lib/api';
 import { usePageSeo } from '../lib/seo';
 import { downloadItemsAsZip, type ZipProgress } from '../lib/zipDownload';
@@ -64,19 +54,15 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
 
-  const [passwordInput, setPasswordInput] = useState('');
-  const [unlocking, setUnlocking] = useState(false);
-  const [unlockError, setUnlockError] = useState('');
-
-  const [selectedFolderPath, setSelectedFolderPath] = useState<string>('__ALL__');
+  const [selectedFolderPath, setSelectedFolderPath] = useState<string>(() => {
+    const q = new URLSearchParams(window.location.search).get('folder');
+    return q || '__ALL__';
+  });
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
   const [layoutOverride, setLayoutOverride] = useState<GalleryLayout | null>(null);
 
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
   const [visitorLikes, setVisitorLikes] = useState<Set<string>>(new Set());
-
-  const [activeVideo, setActiveVideo] = useState<MediaItem | null>(null);
-  const videoDialogRef = useRef<HTMLDialogElement>(null);
 
   const [zipProgress, setZipProgress] = useState<ZipProgress | null>(null);
   const [zipError, setZipError] = useState('');
@@ -115,13 +101,6 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
   }, [loadGallery]);
 
   useEffect(() => {
-    const dialog = videoDialogRef.current;
-    if (!dialog) return;
-    if (activeVideo && !dialog.open) dialog.showModal();
-    else if (!activeVideo && dialog.open) dialog.close();
-  }, [activeVideo]);
-
-  useEffect(() => {
     const dialog = reportDialogRef.current;
     if (!dialog) return;
     if (reportOpen && !dialog.open) dialog.showModal();
@@ -142,85 +121,6 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
   }, [data, selectedFolderPath, mediaFilter, visitorLikes]);
 
   const layout = layoutOverride || data?.gallery.layout || 'masonry';
-  const fontMeta = FONT_PRESETS[data?.gallery.fontPreset || 'sans'];
-  const tokens = data ? resolveGalleryThemeTokens(data.gallery) : null;
-  const activeAccentStyle = tokens
-    ? { backgroundColor: tokens.accent, color: tokens.accentFg, borderColor: tokens.accent }
-    : undefined;
-
-  // Initialize PhotoSwipe lightbox for photo items in the current view
-  useEffect(() => {
-    if (!gridRef.current || !data || data.locked) return;
-
-    const lightbox = new PhotoSwipeLightbox({
-      gallery: gridRef.current,
-      children: 'button[data-pswp-photo="true"]',
-      pswpModule: () => import('photoswipe')
-    });
-
-    lightbox.addFilter('domItemData', (itemData, element) => {
-      const src = element.dataset.pswpSrc;
-      if (src) itemData.src = src;
-      const w = Number(element.dataset.pswpWidth || '0');
-      const h = Number(element.dataset.pswpHeight || '0');
-      if (w > 0) {
-        itemData.width = w;
-        itemData.w = w;
-      }
-      if (h > 0) {
-        itemData.height = h;
-        itemData.h = h;
-      }
-      const thumbEl = element.querySelector('img');
-      if (thumbEl) {
-        itemData.msrc = thumbEl.currentSrc || thumbEl.src;
-        itemData.alt = thumbEl.getAttribute('alt') || '';
-      }
-      return itemData;
-    });
-
-    if (data.gallery.allowDownload) {
-      lightbox.on('uiRegister', () => {
-        lightbox.pswp?.ui?.registerElement({
-          name: 'download-button',
-          order: 8,
-          isButton: true,
-          tagName: 'a',
-          html: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
-          onInit: (el, pswp) => {
-            el.setAttribute('download', '');
-            el.setAttribute('aria-label', 'Download photo');
-            pswp.on('change', () => {
-              const curr = pswp.currSlide?.data;
-              if (curr?.src) {
-                el.setAttribute('href', `${curr.src}&download=1`);
-              }
-            });
-          }
-        });
-      });
-    }
-
-    lightbox.init();
-    return () => {
-      lightbox.destroy();
-    };
-  }, [data, filteredItems, layout]);
-
-  const handleUnlock = async (e: FormEvent) => {
-    e.preventDefault();
-    setUnlockError('');
-    setUnlocking(true);
-    try {
-      await unlockGallery(slug, passwordInput);
-      setPasswordInput('');
-      await loadGallery();
-    } catch (err) {
-      setUnlockError(err instanceof ApiError ? err.message : 'Incorrect password.');
-    } finally {
-      setUnlocking(false);
-    }
-  };
 
   const handleToggleLike = async (fileId: string) => {
     if (!data?.gallery.allowLikes) return;
@@ -416,80 +316,8 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
     );
   }
 
-  if (data.locked && tokens) {
-    return (
-      <main
-        className="flex min-h-screen flex-col items-center justify-center px-4 transition-colors"
-        style={{
-          backgroundColor: tokens.bg,
-          color: tokens.fg,
-          fontFamily: fontMeta.bodyFamily
-        }}
-      >
-        <div
-          className="w-full max-w-md rounded-2xl border p-6 shadow-sm"
-          style={{
-            borderColor: tokens.border,
-            backgroundColor: tokens.surface
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <span
-              className="flex h-11 w-11 items-center justify-center rounded-xl"
-              style={{
-                backgroundColor: tokens.accentSoftBg,
-                color: tokens.accent
-              }}
-            >
-              <Lock className="h-5 w-5" />
-            </span>
-            <div>
-              <h1 className="text-lg font-bold" style={{ fontFamily: fontMeta.headingFamily }}>
-                {data.gallery.title}
-              </h1>
-              <p className="text-xs" style={{ color: tokens.mutedFg }}>
-                {data.gallery.brandName ? `By ${data.gallery.brandName} · ` : ''}
-                Password required
-              </p>
-            </div>
-          </div>
-
-          <form onSubmit={handleUnlock} className="mt-5 space-y-3">
-            <label htmlFor="unlock-pass" className="block text-sm font-medium">
-              Enter Gallery Password
-            </label>
-            <input
-              id="unlock-pass"
-              type="password"
-              required
-              autoFocus
-              value={passwordInput}
-              onChange={(e) => setPasswordInput(e.target.value)}
-              placeholder="Password"
-              className="min-h-[44px] w-full rounded-xl border px-3.5 text-sm focus:outline-none"
-              style={{
-                borderColor: tokens.border,
-                backgroundColor: tokens.bg,
-                color: tokens.fg
-              }}
-            />
-            {unlockError && (
-              <p role="alert" className="text-sm text-red-500">
-                {unlockError}
-              </p>
-            )}
-            <button
-              type="submit"
-              disabled={unlocking}
-              className="min-h-[44px] w-full rounded-xl px-4 text-sm font-semibold transition hover:opacity-90 disabled:opacity-50"
-              style={activeAccentStyle}
-            >
-              {unlocking ? 'Unlocking...' : 'Open Gallery'}
-            </button>
-          </form>
-        </div>
-      </main>
-    );
+  if (data.locked) {
+    return <GalleryLockScreen slug={slug} gallery={data.gallery} onUnlocked={loadGallery} />;
   }
 
   return (
@@ -515,7 +343,13 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
         onBatchDownload={handleBatchDownload}
         onCancelZip={() => zipAbortRef.current?.abort()}
         onToggleLike={handleToggleLike}
-        onOpenVideo={setActiveVideo}
+        onOpenItem={(item) => {
+          const suffix =
+            selectedFolderPath !== '__ALL__'
+              ? `?folder=${encodeURIComponent(selectedFolderPath)}`
+              : '';
+          onNavigate(`/g/${slug}/view/${item.id}${suffix}`);
+        }}
         onOpenDonate={onOpenDonate}
         onOpenReport={() => {
           setReportStatus('idle');
@@ -525,54 +359,6 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
         feedbackFormUrl={config.feedbackFormUrl}
         reportFormUrl={config.reportFormUrl}
       />
-
-      {/* HD Video Player Dialog */}
-      <dialog
-        ref={videoDialogRef}
-        onClose={() => setActiveVideo(null)}
-        onClick={(e) => {
-          if (e.target === videoDialogRef.current) setActiveVideo(null);
-        }}
-        aria-label={activeVideo?.name || 'Video player'}
-        className="m-auto w-[min(95vw,56rem)] rounded-2xl border border-slate-800 bg-slate-950 p-0 text-white shadow-2xl"
-      >
-        {activeVideo && (
-          <div>
-            <div className="flex items-center justify-between gap-4 border-b border-slate-800 px-4 py-3">
-              <p className="truncate text-sm font-medium">{activeVideo.name}</p>
-              <div className="flex items-center gap-2">
-                {data.gallery.allowDownload && (
-                  <a
-                    href={mediaFullUrl(slug, activeVideo.id, true)}
-                    download={activeVideo.name}
-                    className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg bg-slate-800 px-3 text-xs font-medium text-white hover:bg-slate-700"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    <span>Download</span>
-                  </a>
-                )}
-                <button
-                  type="button"
-                  aria-label="Close video player"
-                  onClick={() => setActiveVideo(null)}
-                  className="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-            <video
-              key={activeVideo.id}
-              src={mediaFullUrl(slug, activeVideo.id, false)}
-              poster={mediaThumbUrl(slug, activeVideo.id, 1200)}
-              controls
-              autoPlay
-              playsInline
-              className="max-h-[75vh] w-full bg-black"
-            />
-          </div>
-        )}
-      </dialog>
 
       {/* Report Abuse Dialog */}
       <dialog
