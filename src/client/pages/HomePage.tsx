@@ -526,6 +526,27 @@ export function HomePage({
                   </div>
                 ))}
               </div>
+
+              <div className={`mt-6 flex flex-wrap items-center justify-between gap-3 border-t pt-4 ${borderRule}`}>
+                <p className={`max-w-[68ch] text-xs leading-relaxed sm:text-sm ${bodyText}`}>
+                  <span className="font-semibold">Disclaimer:</span> Since {config.appName} is
+                  100% free with no subscriptions, its capacity and features are currently limited.
+                  If you&apos;d like to help expand this tool and raise those limits over time,
+                  you&apos;re welcome to support it with a donation.
+                </p>
+                <button
+                  type="button"
+                  onClick={onOpenDonate}
+                  className={`inline-flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition ${
+                    isDark
+                      ? 'border-[#f4f1ea]/20 text-[#f4f1ea] hover:bg-[#f4f1ea]/10'
+                      : 'border-[#141311]/20 bg-white text-[#141311] hover:bg-[#141311]/5'
+                  }`}
+                >
+                  <Heart className="h-3.5 w-3.5" />
+                  <span>Help expand this tool</span>
+                </button>
+              </div>
             </div>
           </section>
 
