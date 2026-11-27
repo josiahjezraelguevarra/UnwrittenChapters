@@ -59,6 +59,7 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
     return q || '__ALL__';
   });
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [layoutOverride, setLayoutOverride] = useState<GalleryLayout | null>(null);
 
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
@@ -109,6 +110,7 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
 
   const filteredItems = useMemo(() => {
     if (!data || data.locked) return [];
+    const q = searchQuery.trim().toLowerCase();
     return data.items.filter((item) => {
       if (selectedFolderPath !== '__ALL__' && item.folderPath !== selectedFolderPath) {
         return false;
@@ -116,9 +118,12 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
       if (mediaFilter === 'image' && item.kind !== 'image') return false;
       if (mediaFilter === 'video' && item.kind !== 'video') return false;
       if (mediaFilter === 'favorites' && !visitorLikes.has(item.id)) return false;
+      if (q && !item.name.toLowerCase().includes(q) && !item.folderPath.toLowerCase().includes(q)) {
+        return false;
+      }
       return true;
     });
-  }, [data, selectedFolderPath, mediaFilter, visitorLikes]);
+  }, [data, selectedFolderPath, mediaFilter, visitorLikes, searchQuery]);
 
   const layout = layoutOverride || data?.gallery.layout || 'masonry';
 
@@ -336,6 +341,8 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
         onMediaFilterChange={setMediaFilter}
         selectedFolderPath={selectedFolderPath}
         onSelectedFolderPathChange={setSelectedFolderPath}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
         filteredItems={filteredItems}
         gridRef={gridRef}
         zipProgress={zipProgress}

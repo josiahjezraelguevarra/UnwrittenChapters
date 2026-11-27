@@ -394,6 +394,16 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
     expiryAction
   ]);
 
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [hasUnsavedChanges]);
+
   const resetDraft = () => {
     if (!data) return;
     applyGalleryToForm(data.gallery);
@@ -701,14 +711,45 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
             <img src="/logo.svg" alt="" className="hidden h-7 w-7 shrink-0 object-contain sm:block" />
             <div>
               <h1 className="text-lg font-bold">Manage: {data.gallery.title}</h1>
-              <p className="text-xs text-slate-500">
-                {data.gallery.itemCount} items · {data.gallery.viewCount} views · Last synced{' '}
-                {new Date(data.gallery.syncedAt).toLocaleString()}
-              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                <span>
+                  {data.gallery.itemCount} items · {data.gallery.viewCount} views · Synced{' '}
+                  {new Date(data.gallery.syncedAt).toLocaleDateString()}
+                </span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    data.gallery.hasPassword
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'bg-emerald-100 text-emerald-800'
+                  }`}
+                >
+                  {data.gallery.hasPassword ? 'Password Locked' : 'Public Link'}
+                </span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    data.gallery.allowDownload
+                      ? 'bg-stone-100 text-slate-700'
+                      : 'bg-rose-100 text-rose-800'
+                  }`}
+                >
+                  {data.gallery.allowDownload ? 'Downloads On' : 'View-Only'}
+                </span>
+              </div>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {hasUnsavedChanges && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void handleSave()}
+                className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-amber-500 px-3.5 text-xs font-semibold text-white shadow-xs transition hover:bg-amber-600 disabled:opacity-50"
+              >
+                <Save className="h-3.5 w-3.5" />
+                <span>{saving ? 'Saving...' : 'Save Changes'}</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={handleSync}
@@ -869,10 +910,27 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
               )}
             </div>
 
-            {/* Clean 3-Tab Switcher */}
+            {/* Clean 3-Tab Switcher with Arrow-Key Navigation */}
             <div
               role="tablist"
               aria-label="Gallery customization sections"
+              onKeyDown={(e) => {
+                const order = ['details', 'design', 'access'] as const;
+                const idx = order.indexOf(activeTab);
+                if (e.key === 'ArrowRight') {
+                  e.preventDefault();
+                  setActiveTab(order[(idx + 1) % order.length]);
+                } else if (e.key === 'ArrowLeft') {
+                  e.preventDefault();
+                  setActiveTab(order[(idx - 1 + order.length) % order.length]);
+                } else if (e.key === 'Home') {
+                  e.preventDefault();
+                  setActiveTab(order[0]);
+                } else if (e.key === 'End') {
+                  e.preventDefault();
+                  setActiveTab(order[order.length - 1]);
+                }
+              }}
               className="mt-4 grid grid-cols-3 gap-1 rounded-xl border border-stone-200 bg-stone-100 p-1"
             >
               {(
@@ -886,9 +944,12 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
                 return (
                   <button
                     key={tabId}
+                    id={`manage-tab-${tabId}`}
                     type="button"
                     role="tab"
+                    tabIndex={selected ? 0 : -1}
                     aria-selected={selected}
+                    aria-controls={`manage-panel-${tabId}`}
                     onClick={() => setActiveTab(tabId)}
                     className={`inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition ${
                       selected
@@ -1209,7 +1270,13 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-stone-200 pt-4">
+              <div
+                className={`flex flex-wrap items-center justify-end gap-2 pt-4 ${
+                  hasUnsavedChanges
+                    ? 'sticky bottom-3 z-20 rounded-xl border border-amber-200 bg-white/95 p-3 shadow-lg backdrop-blur-md'
+                    : 'border-t border-stone-200'
+                }`}
+              >
                 {hasUnsavedChanges && (
                   <button
                     type="button"
@@ -1459,9 +1526,11 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
           ) : (
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-5">
               {likedItems.map((item) => (
-                <div
+                <button
                   key={item.id}
-                  className="group relative overflow-hidden rounded-xl border border-stone-200 bg-stone-100"
+                  type="button"
+                  onClick={() => onNavigate(`/g/${slug}/view/${item.id}`)}
+                  className="group relative overflow-hidden rounded-xl border border-stone-200 bg-stone-100 text-left transition hover:border-slate-400"
                 >
                   <div className="relative overflow-hidden">
                     <img
@@ -1480,7 +1549,7 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
                       )}
                     </div>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}

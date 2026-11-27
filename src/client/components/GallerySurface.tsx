@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import {
+  ArrowUp,
   ChevronDown,
   Columns2,
   Download,
@@ -13,8 +14,10 @@ import {
   Maximize,
   Play,
   Rows3,
+  Search,
   Square,
-  Video as VideoIcon
+  Video as VideoIcon,
+  X
 } from 'lucide-react';
 import {
   CARD_RADIUS_META,
@@ -69,6 +72,8 @@ export interface GallerySurfaceProps {
   onMediaFilterChange: (filter: MediaFilter) => void;
   selectedFolderPath: string;
   onSelectedFolderPathChange: (path: string) => void;
+  searchQuery?: string;
+  onSearchQueryChange?: (q: string) => void;
   filteredItems: MediaItem[];
   gridRef?: RefObject<HTMLDivElement | null>;
   previewMode?: boolean;
@@ -102,6 +107,8 @@ export function GallerySurface({
   onMediaFilterChange,
   selectedFolderPath,
   onSelectedFolderPathChange,
+  searchQuery = '',
+  onSearchQueryChange,
   filteredItems,
   gridRef,
   previewMode = false,
@@ -141,9 +148,17 @@ export function GallerySurface({
   const toolbarRef = useRef<HTMLElement>(null);
   const internalGridRef = useRef<HTMLDivElement>(null);
   const activeGridRef = gridRef ?? internalGridRef;
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const [galleryRevealed, setGalleryRevealed] = useState(
     previewMode || heroStyle !== 'fullscreen'
   );
+
+  useEffect(() => {
+    if (previewMode) return;
+    const onScroll = () => setShowScrollTop(window.scrollY > 560);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [previewMode]);
 
   useEffect(() => {
     if (previewMode || heroStyle !== 'fullscreen') {
@@ -572,7 +587,36 @@ export function GallerySurface({
             })}
           </div>
 
-          <div className="flex items-center justify-between gap-2 sm:justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-2 sm:justify-end">
+            {!previewMode && onSearchQueryChange && items.length > 12 && (
+              <div className="relative flex-1 sm:w-44 sm:flex-initial">
+                <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 opacity-55" />
+                <input
+                  type="search"
+                  aria-label="Search filenames"
+                  value={searchQuery}
+                  onChange={(e) => onSearchQueryChange(e.target.value)}
+                  placeholder="Search photo..."
+                  className="min-h-[36px] w-full rounded-lg border pr-7 pl-8 text-xs focus:outline-none sm:min-h-[34px]"
+                  style={{
+                    borderColor: tokens.border,
+                    backgroundColor: tokens.surfaceMuted,
+                    color: tokens.fg
+                  }}
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => onSearchQueryChange('')}
+                    className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded p-0.5 opacity-60 hover:opacity-100"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
+
             <div
               role="group"
               aria-label="Layout mode"
@@ -773,6 +817,7 @@ export function GallerySurface({
               onClick={() => {
                 onMediaFilterChange('all');
                 onSelectedFolderPathChange('__ALL__');
+                onSearchQueryChange?.('');
               }}
               className="mt-4 min-h-[40px] rounded-xl px-4 text-xs font-medium"
               style={activeAccentStyle}
@@ -1085,6 +1130,22 @@ export function GallerySurface({
             )}
           </div>
         </footer>
+      )}
+
+      {!previewMode && showScrollTop && (
+        <button
+          type="button"
+          aria-label="Scroll back to top"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed right-4 bottom-16 z-30 flex h-11 w-11 items-center justify-center rounded-full border shadow-lg backdrop-blur-md transition hover:scale-105"
+          style={{
+            backgroundColor: hexToRgba(tokens.surface, 0.92),
+            borderColor: tokens.border,
+            color: tokens.fg
+          }}
+        >
+          <ArrowUp className="h-4 w-4" />
+        </button>
       )}
 
       {!previewMode && (
