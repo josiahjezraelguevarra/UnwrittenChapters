@@ -288,6 +288,26 @@
   animation: uc-hero-bounce 2s ease-in-out infinite;
 }
 
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 9999;
+}
+
+html.uc-theme-transition *,
+html.uc-theme-transition *::before,
+html.uc-theme-transition *::after {
+  transition: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .uc-cursor-blink,
   .uc-fade-in,

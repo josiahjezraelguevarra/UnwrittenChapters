@@ -1,4 +1,5 @@
-import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useState, type MouseEvent } from 'react';
+import { flushSync } from 'react-dom';
 import { FEEDBACK_FORM_URL, REPORT_FORM_URL } from '../shared/contact';
 import type { AppPublicConfig } from '../shared/types';
 import { DonateModal } from './components/DonateModal';
@@ -37,16 +38,77 @@ export function App() {
   const [donateOpen, setDonateOpen] = useState(false);
   const [homeTheme, setHomeTheme] = useState<'light' | 'dark'>(loadInitialHomeTheme);
 
-  const toggleHomeTheme = useCallback(() => {
-    setHomeTheme((prev) => {
-      const next = prev === 'dark' ? 'light' : 'dark';
-      try {
-        localStorage.setItem(HOME_THEME_KEY, next);
-      } catch {
-        // Ignore storage errors
-      }
-      return next;
+  const toggleHomeTheme = useCallback((event?: MouseEvent<HTMLElement>) => {
+    const commitThemeToggle = () => {
+      setHomeTheme((prev) => {
+        const next = prev === 'dark' ? 'light' : 'dark';
+        try {
+          localStorage.setItem(HOME_THEME_KEY, next);
+        } catch {
+          // Ignore storage errors
+        }
+        return next;
+      });
+    };
+
+    const reduceMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+    const docWithTransition = document as unknown as {
+      startViewTransition?: (cb: () => void) => {
+        ready: Promise<void>;
+        finished: Promise<void>;
+      };
+    };
+
+    if (reduceMotion || typeof docWithTransition.startViewTransition !== 'function') {
+      commitThemeToggle();
+      return;
+    }
+
+    const rect = event?.currentTarget?.getBoundingClientRect();
+    const x = rect ? rect.left + rect.width / 2 : window.innerWidth - 48;
+    const y = rect ? rect.top + rect.height / 2 : 32;
+    const endRadius = Math.hypot(
+      Math.max(x, window.innerWidth - x),
+      Math.max(y, window.innerHeight - y)
+    );
+
+    const rootEl = document.documentElement;
+    rootEl.classList.add('uc-theme-transition');
+
+    const transition = docWithTransition.startViewTransition(() => {
+      flushSync(commitThemeToggle);
     });
+
+    transition.ready
+      .then(() => {
+        document.documentElement.animate(
+          {
+            clipPath: [
+              `circle(0px at ${x}px ${y}px)`,
+              `circle(${endRadius}px at ${x}px ${y}px)`
+            ]
+          },
+          {
+            duration: 540,
+            easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+            pseudoElement: '::view-transition-new(root)'
+          }
+        );
+      })
+      .catch(() => {
+        // Ignore cancelled transitions on rapid toggles
+      });
+
+    transition.finished
+      .catch(() => {
+        // Ignore cancelled transitions on rapid toggles
+      })
+      .finally(() => {
+        rootEl.classList.remove('uc-theme-transition');
+      });
   }, []);
 
   useEffect(() => {

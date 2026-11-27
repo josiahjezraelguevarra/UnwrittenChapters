@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, type MouseEvent } from 'react';
 import {
   AlertCircle,
   ArrowDownRight,
@@ -43,7 +43,7 @@ import { usePageSeo } from '../lib/seo';
 interface HomePageProps {
   config: AppPublicConfig;
   homeTheme: 'light' | 'dark';
-  onToggleHomeTheme: () => void;
+  onToggleHomeTheme: (event: MouseEvent<HTMLButtonElement>) => void;
   onOpenDonate: () => void;
   onNavigate: (path: string) => void;
 }
@@ -272,10 +272,10 @@ export function HomePage({
 
               <button
                 type="button"
-                onClick={onToggleHomeTheme}
+                onClick={(e) => onToggleHomeTheme(e)}
                 aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
                 title={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
-                className={`flex min-h-[40px] min-w-[40px] items-center justify-center rounded-full border transition ${
+                className={`flex min-h-[40px] min-w-[40px] items-center justify-center rounded-full border transition active:scale-95 ${
                   isDark
                     ? 'border-[#f4f1ea]/20 text-[#f4f1ea] hover:bg-[#f4f1ea]/10'
                     : 'border-[#141311]/15 text-[#141311] hover:bg-[#141311]/5'
