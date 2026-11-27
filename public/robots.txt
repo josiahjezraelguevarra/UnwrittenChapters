@@ -2,3 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /g/
 Disallow: /api/
+Sitemap: https://unwrittenchapters.website/sitemap.xml
