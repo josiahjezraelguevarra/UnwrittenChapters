@@ -139,6 +139,8 @@ export function GallerySurface({
     previewImageMap?.[fileId] || mediaThumbUrl(slug, fileId, width);
 
   const toolbarRef = useRef<HTMLElement>(null);
+  const internalGridRef = useRef<HTMLDivElement>(null);
+  const activeGridRef = gridRef ?? internalGridRef;
   const [galleryRevealed, setGalleryRevealed] = useState(
     previewMode || heroStyle !== 'fullscreen'
   );
@@ -160,11 +162,52 @@ export function GallerySurface({
           observer.disconnect();
         }
       },
-      { threshold: 0.08 }
+      { threshold: 0.05 }
     );
     observer.observe(target);
     return () => observer.disconnect();
   }, [previewMode, heroStyle]);
+
+  useEffect(() => {
+    if (previewMode) return;
+    const container = activeGridRef.current;
+    if (!container) return;
+    const cards = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-gallery-card="true"]')
+    );
+    if (cards.length === 0) return;
+
+    if (
+      typeof IntersectionObserver === 'undefined' ||
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    ) {
+      cards.forEach((el) => el.classList.add('uc-card-visible'));
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        let batchIdx = 0;
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const el = entry.target as HTMLElement;
+          el.style.transitionDelay = `${Math.min(batchIdx * 45, 225)}ms`;
+          el.classList.add('uc-card-visible');
+          observer.unobserve(el);
+          batchIdx += 1;
+        }
+      },
+      { rootMargin: '0px 0px -30px 0px', threshold: 0.04 }
+    );
+
+    cards.forEach((el) => {
+      if (!el.classList.contains('uc-card-visible')) {
+        observer.observe(el);
+      }
+    });
+
+    return () => observer.disconnect();
+  }, [previewMode, activeGridRef, filteredItems, layout]);
 
   const scrollToGallery = () => {
     setGalleryRevealed(true);
@@ -300,11 +343,11 @@ export function GallerySurface({
           }}
         >
           {coverId && (
-            <div className="absolute inset-0">
+            <div className="absolute inset-0 overflow-hidden">
               <img
                 src={resolveThumb(coverId, previewMode ? 1200 : 1600)}
                 alt=""
-                className="h-full w-full scale-[1.02] object-cover"
+                className={`h-full w-full object-cover ${previewMode ? 'scale-[1.02]' : 'uc-hero-zoom'}`}
               />
               <div
                 className="absolute inset-0"
@@ -739,7 +782,7 @@ export function GallerySurface({
           </div>
         ) : (
           <div
-            ref={gridRef}
+            ref={activeGridRef}
             className={`${gridContainerClass} ${galleryRevealed ? 'uc-slide-reveal' : 'opacity-0'}`}
             style={gridContainerStyle}
           >
@@ -760,14 +803,15 @@ export function GallerySurface({
                       ? '4 / 5'
                       : `${item.width || 4} / ${item.height || 3}`;
 
+              const cardMotionClass = previewMode ? '' : 'uc-gallery-card ';
               const cardClass =
                 layout === 'masonry'
-                  ? 'masonry-item group relative overflow-hidden'
+                  ? `${cardMotionClass}masonry-item group relative overflow-hidden`
                   : layout === 'justified'
-                    ? 'justified-item group relative flex flex-col overflow-hidden'
+                    ? `${cardMotionClass}justified-item group relative flex flex-col overflow-hidden`
                     : isEditorialHero
-                      ? 'col-span-2 group relative overflow-hidden'
-                      : 'group relative overflow-hidden';
+                      ? `${cardMotionClass}col-span-2 group relative overflow-hidden`
+                      : `${cardMotionClass}group relative overflow-hidden`;
 
               const justifiedFlexGrow =
                 layout === 'justified'
@@ -813,7 +857,12 @@ export function GallerySurface({
                   : 'relative overflow-hidden';
 
               return (
-                <article key={item.id} className={cardClass} style={articleStyle}>
+                <article
+                  key={item.id}
+                  data-gallery-card={previewMode ? undefined : 'true'}
+                  className={cardClass}
+                  style={articleStyle}
+                >
                   <div
                     className={`${mediaWrapperClass} ${!gallery.allowDownload ? 'select-none' : ''}`}
                     style={{ borderRadius: innerMediaRadius }}
