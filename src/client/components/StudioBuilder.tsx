@@ -182,9 +182,8 @@ export function StudioBuilder({
           <p className="flex items-center gap-2 text-xs text-[#141311]/60">
             <Sparkles className="h-3.5 w-3.5 shrink-0 opacity-80" />
             <span>
-              Next step: we&apos;ll scan your folder and open the gallery manager so you can
-              customize colors, layout, branding, password &amp; expiration with a live preview of
-              your actual photos.
+              Next: customize your full-screen cover, layouts, QR print cards, download toggle &amp;
+              password in Manager.
             </span>
           </p>
 

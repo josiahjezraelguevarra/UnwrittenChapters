@@ -32,45 +32,45 @@ interface HomePageProps {
 const AUDIENCE_LIST = [
   {
     index: '01',
-    title: 'Wedding & Portrait Photographers',
+    title: 'Wedding & Portrait Studios',
     detail:
-      'Deliver curated shoots with client favorite hearts and one-click Lightroom filename exports.'
+      'Deliver full-screen cover galleries with favorites, QR print cards, and Lightroom exports.'
   },
   {
     index: '02',
-    title: 'Event & Campus Documentarians',
+    title: 'Multi-Folder Events',
     detail:
-      'Organize multi-day ceremonies or colloquiums by Drive subfolder without paying per-gigabyte gallery fees.'
+      'Combine up to 3 public Drive folders into one album organized cleanly by chapter.'
   },
   {
     index: '03',
-    title: 'Videographers & Creative Studios',
+    title: 'Photo & Video Creators',
     detail:
-      'Stream HD video clips directly from Drive with HTTP Range seeking alongside high-resolution stills.'
+      'Dedicated photo studio and HD video views with swipe navigation and download locks.'
   },
   {
     index: '04',
-    title: 'Families, Travelers & Archives',
+    title: 'Free Browser Photo Tools',
     detail:
-      'Turn shared trip folders into clean, password-optional albums anyone can browse and download as a ZIP.'
+      'Batch watermark, strip GPS/EXIF, build QR cards, and split carousels locally on your device.'
   }
 ];
 
 const HOW_IT_WORKS_STEPS = [
   {
     step: '01',
-    title: 'Set your Drive folder to public viewer',
-    body: 'In Google Drive, right-click the folder you want to share → Share → set General access to "Anyone with the link" as Viewer. Subfolders up to depth 3 are indexed automatically.'
+    title: 'Share your Drive folder',
+    body: 'In Google Drive, set folder access to "Anyone with the link → Viewer". Subfolders are indexed automatically.'
   },
   {
     step: '02',
-    title: 'Paste the link & style the gallery',
-    body: 'Drop the folder URL into the builder above. Optionally add your studio name, custom slug, typography preset, accent color, photo spacing, password lock, or auto-expiration.'
+    title: 'Paste up to 3 links & style',
+    body: 'Drop 1–3 folder links above, then pick your cover hero, layout, frame, download rules, or password in Manager.'
   },
   {
     step: '03',
-    title: 'Send the Share Link & keep your Manage Link',
-    body: 'Send /g/<slug> to your clients so they can browse, heart favorites, and batch-download ZIPs. Bookmark your secret Manage Link to edit styling, re-sync Drive, or export favorites.'
+    title: 'Share link or 4×6 QR card',
+    body: 'Send your gallery link or print a QR card. New photos added to Drive auto-sync in the background.'
   }
 ];
 
@@ -78,22 +78,22 @@ const SYSTEM_LIMITATIONS = [
   {
     label: 'Public Drive Link Required',
     detail:
-      'Only folders shared as "Anyone with the link → Viewer" can be scanned. Private folders requiring Google sign-in are not accessible.'
+      'Folders must be set to "Anyone with the link → Viewer". Private sign-in folders cannot be scanned.'
   },
   {
-    label: 'Folder & Item Caps',
+    label: 'Album & Folder Caps',
     detail:
-      'Indexes up to 3 nested subfolder levels, 40 subfolders, and 2,000 photo/video items per gallery.'
+      'Supports up to 3 Drive links, 3 nested levels, 40 subfolders, and 2,000 photo/video items per album.'
   },
   {
     label: 'Files Stay on Google Drive',
     detail:
-      'We never copy or store your media. Deleting or unsharing files in Google Drive removes access after sync/cache expiry, and media delivery shares free-tier Drive API & Cloudflare limits (20 gallery creations/hour per IP).'
+      'Nothing is copied to our servers—deleting or unsharing files in Drive removes access automatically.'
   },
   {
-    label: 'No Accounts = No Token Recovery',
+    label: 'Bookmark Your Manage Link',
     detail:
-      'Because there are no logins, your Manage Link (#token) is the sole key to edit or delete a gallery. Bookmark it immediately.'
+      'Because there are no accounts, your secret Manage link is the sole key to edit or delete a gallery.'
   }
 ];
 
@@ -263,15 +263,14 @@ export function HomePage({
             <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-12 lg:gap-12">
               <div className="lg:col-span-6">
                 <p className={`text-sm font-medium ${mutedText}`}>
-                  Free hosting · No accounts · Files stay on Drive
+                  Free · No sign-up · Up to 3 Drive folders per album
                 </p>
                 <h1 className="mt-4 text-3xl leading-[1.12] font-semibold tracking-tight sm:text-4xl lg:text-5xl">
-                  Share Google Drive folders as client photo galleries.
+                  Turn Google Drive folders into client-ready galleries.
                 </h1>
-                <p className={`mt-6 max-w-[54ch] text-base leading-relaxed sm:text-[1.0625rem] ${bodyText}`}>
-                  Skip re-uploading gigabytes or paying monthly gallery subscriptions. Paste any
-                  public Google Drive link to publish a branded photo and HD video gallery with
-                  client favorites, password locks, and batch ZIP downloads.
+                <p className={`mt-5 max-w-[50ch] text-base leading-relaxed sm:text-[1.0625rem] ${bodyText}`}>
+                  Skip re-uploading or monthly fees. Combine up to 3 public Drive folders into a
+                  full-screen gallery with favorites, QR print cards, and ZIP downloads.
                 </p>
 
                 <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -315,23 +314,23 @@ export function HomePage({
                   <span className={`mr-2 tabular-nums ${mutedText}`}>01</span>Zero sign-up
                 </p>
                 <p className={`mt-1.5 text-[15px] leading-relaxed ${bodyText}`}>
-                  No accounts for you or your clients—manage via a private bookmark link.
+                  No logins needed—share a gallery link with clients and keep a secret Manage link.
                 </p>
               </div>
               <div>
                 <p className="text-sm font-medium">
-                  <span className={`mr-2 tabular-nums ${mutedText}`}>02</span>Custom presentation
+                  <span className={`mr-2 tabular-nums ${mutedText}`}>02</span>Studio styling
                 </p>
                 <p className={`mt-1.5 text-[15px] leading-relaxed ${bodyText}`}>
-                  Masonry, justified, or square grids with editorial typography &amp; live preview.
+                  Full-screen cover hero, 5 layouts, Polaroid &amp; mat frames, and live preview.
                 </p>
               </div>
               <div>
                 <p className="text-sm font-medium">
-                  <span className={`mr-2 tabular-nums ${mutedText}`}>03</span>Client selection
+                  <span className={`mr-2 tabular-nums ${mutedText}`}>03</span>Smart delivery
                 </p>
                 <p className={`mt-1.5 text-[15px] leading-relaxed ${bodyText}`}>
-                  Clients heart favorite photos and videos or download batch ZIPs, while you export selected filenames.
+                  Separate photo &amp; video views, QR print cards, favorites, and instant ZIPs.
                 </p>
               </div>
             </div>
@@ -421,16 +420,15 @@ export function HomePage({
                   About
                 </p>
                 <h2 className="mt-3 text-2xl leading-tight font-semibold tracking-tight sm:text-3xl">
-                  Built for sending folders without the clutter of Drive.
+                  Give Drive folders a finished gallery experience.
                 </h2>
-                <p className={`mt-4 max-w-[54ch] text-[15px] leading-relaxed sm:text-base ${bodyText}`}>
-                  Google Drive is great for storing final exports, but sending a raw Drive folder
-                  to clients feels unfinished and awkward to browse. {config.appName} turns your
-                  existing Drive folder into a finished client gallery—while your files stay right
-                  where they already live.
+                <p className={`mt-4 max-w-[46ch] text-[15px] leading-relaxed sm:text-base ${bodyText}`}>
+                  Raw Drive links feel unfinished to clients. {config.appName} wraps your Drive
+                  folders in a clean, customizable gallery—while your files stay safely on Google
+                  Drive.
                 </p>
                 <p className={`mt-3 text-sm leading-relaxed sm:text-base ${bodyText}`}>
-                  No sign-ups, no monthly storage subscriptions, and no duplicate uploads.
+                  No accounts, no storage bills, and no re-uploads.
                 </p>
               </div>
 
@@ -527,9 +525,8 @@ export function HomePage({
                   Keep {config.appName} free for every creator.
                 </h2>
                 <p className={`mt-3 text-sm leading-relaxed sm:text-base ${bodyText}`}>
-                  There are no subscriptions or paywalls here. If this saved you time or helped you
-                  deliver a client shoot cleanly, tips via Maya help keep hosting and maintain this
-                  website. Open the Maya QR modal to send a tip.
+                  No subscriptions or paywalls. If this helped you deliver a shoot or save on
+                  storage fees, tips via Maya help keep hosting free.
                 </p>
               </div>
               <button
