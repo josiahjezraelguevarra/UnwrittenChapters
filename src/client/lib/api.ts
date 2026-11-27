@@ -287,11 +287,15 @@ export interface BibleVerseResponse {
   reference: string;
   text: string;
   translation: 'ESV';
-  source?: 'api' | 'fallback';
+  source?: 'curated' | 'api' | 'fallback';
 }
 
-export async function fetchRandomBibleVerse(signal?: AbortSignal): Promise<BibleVerseResponse> {
-  const res = await fetch('/api/bible/random', { signal, cache: 'no-store' });
+export async function fetchRandomBibleVerse(
+  signal?: AbortSignal,
+  excludeRef?: string
+): Promise<BibleVerseResponse> {
+  const qs = excludeRef ? `?exclude=${encodeURIComponent(excludeRef)}` : '';
+  const res = await fetch(`/api/bible/random${qs}`, { signal, cache: 'no-store' });
   return parseJson<BibleVerseResponse>(res);
 }
 

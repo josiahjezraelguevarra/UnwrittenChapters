@@ -57,7 +57,7 @@ export function VerseTickerBar({ dark = false, customColors }: VerseTickerBarPro
 
   const loadOneVerse = useCallback(async (avoidRef?: string): Promise<BibleVerseResponse> => {
     try {
-      const result = await fetchRandomBibleVerse();
+      const result = await fetchRandomBibleVerse(undefined, avoidRef);
       if (result.reference && result.text) {
         return result;
       }

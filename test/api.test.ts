@@ -595,36 +595,33 @@ describe('Gallery API & Media Proxy security', () => {
     expect(noGapBody.gallery.gridGap).toBe('none');
   });
 
-  it('serves sanitized ESV Bible verses from public API with safe fallback', async () => {
+  it('serves curated popular ESV Bible verses locally with zero external fetches', async () => {
+    const fetchSpy = vi.fn();
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
     const res = await app.request('/api/bible/random', undefined, env);
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(fetchSpy).not.toHaveBeenCalled();
     const body = (await res.json()) as {
       reference: string;
       text: string;
       translation: string;
       source: string;
     };
-    expect(body).toEqual({
-      reference: 'John 3:16',
-      text: 'For God so loved the world & gave his only Son.',
-      translation: 'ESV',
-      source: 'api'
-    });
+    expect(body.translation).toBe('ESV');
+    expect(body.source).toBe('curated');
+    expect(body.reference.length).toBeGreaterThan(2);
+    expect(body.text.length).toBeGreaterThan(10);
 
-    globalThis.fetch = vi.fn(async () => new Response('Unavailable', { status: 503 })) as unknown as typeof fetch;
-    const fallbackRes = await app.request('/api/bible/random', undefined, env);
-    expect(fallbackRes.status).toBe(200);
-    const fallbackBody = (await fallbackRes.json()) as {
-      reference: string;
-      text: string;
-      translation: string;
-      source: string;
-    };
-    expect(fallbackBody.translation).toBe('ESV');
-    expect(fallbackBody.source).toBe('fallback');
-    expect(fallbackBody.reference.length).toBeGreaterThan(2);
-    expect(fallbackBody.text.length).toBeGreaterThan(10);
+    const nextRes = await app.request(
+      `/api/bible/random?exclude=${encodeURIComponent(body.reference)}`,
+      undefined,
+      env
+    );
+    expect(nextRes.status).toBe(200);
+    const nextBody = (await nextRes.json()) as { reference: string };
+    expect(nextBody.reference).not.toBe(body.reference);
   });
 
   it('enforces HttpOnly admin cookies, token rotation, CSRF origin checks, password policy, and strict inputs', async () => {
