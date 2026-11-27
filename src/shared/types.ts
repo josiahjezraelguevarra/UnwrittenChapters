@@ -63,6 +63,7 @@ export interface PublicGalleryConfig {
   brandUrl: string;
   allowDownload: boolean;
   allowLikes: boolean;
+  autoSync: boolean;
   hasPassword: boolean;
   expiresAt: number | null;
   itemCount: number;

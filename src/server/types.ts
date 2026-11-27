@@ -61,6 +61,7 @@ export interface GalleryRow {
   admin_token_hash: string;
   allow_download: number;
   allow_likes: number;
+  auto_sync: number;
   expires_at: number | null;
   status: string;
   items_json: string;

@@ -121,6 +121,7 @@ export interface CreateGalleryPayload {
   expiresInDays?: number | null;
   allowDownload?: boolean;
   allowLikes?: boolean;
+  autoSync?: boolean;
   customSlug?: string;
   turnstileToken?: string;
 }

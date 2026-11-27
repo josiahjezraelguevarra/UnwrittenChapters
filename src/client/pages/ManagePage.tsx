@@ -124,6 +124,7 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
   const [coverFileId, setCoverFileId] = useState<string>('');
   const [allowDownload, setAllowDownload] = useState(true);
   const [allowLikes, setAllowLikes] = useState(true);
+  const [autoSync, setAutoSync] = useState(true);
   const [newPassword, setNewPassword] = useState('');
   const [clearPassword, setClearPassword] = useState(false);
   const [expiryAction, setExpiryAction] = useState<string>('');
@@ -170,6 +171,7 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
     setCoverFileId(g.coverFileId || '');
     setAllowDownload(g.allowDownload);
     setAllowLikes(g.allowLikes);
+    setAutoSync(g.autoSync !== false);
     setNewPassword('');
     setClearPassword(false);
     setExpiryAction('');
@@ -299,7 +301,8 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
       cardRadius,
       coverFileId: coverFileId || data.gallery.coverFileId,
       allowDownload,
-      allowLikes
+      allowLikes,
+      autoSync
     };
   }, [
     data,
@@ -321,7 +324,8 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
     cardRadius,
     coverFileId,
     allowDownload,
-    allowLikes
+    allowLikes,
+    autoSync
   ]);
 
   const hasUnsavedChanges = useMemo(() => {
@@ -347,6 +351,7 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
       (coverFileId || '') !== (g.coverFileId || '') ||
       allowDownload !== g.allowDownload ||
       allowLikes !== g.allowLikes ||
+      autoSync !== (g.autoSync !== false) ||
       Boolean(newPassword.trim()) ||
       clearPassword ||
       expiryAction !== ''
@@ -372,6 +377,7 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
     coverFileId,
     allowDownload,
     allowLikes,
+    autoSync,
     newPassword,
     clearPassword,
     expiryAction
@@ -407,6 +413,7 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
         coverFileId: coverFileId || undefined,
         allowDownload,
         allowLikes,
+        autoSync,
         ...(expiryAction === 'never'
           ? { expiresInDays: null }
           : expiryAction
@@ -1020,6 +1027,12 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
                       description="Let visitors heart photos for Lightroom selection"
                       checked={allowLikes}
                       onChange={setAllowLikes}
+                    />
+                    <ToggleField
+                      label="Auto-sync Drive changes"
+                      description="Refresh newly added or removed Drive files in the background every 6 hours"
+                      checked={autoSync}
+                      onChange={setAutoSync}
                     />
                   </div>
 

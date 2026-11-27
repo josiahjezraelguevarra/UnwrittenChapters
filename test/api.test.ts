@@ -108,18 +108,19 @@ function createMemoryDB() {
               admin_token_hash: args[21] as string,
               allow_download: args[22] as number,
               allow_likes: args[23] as number,
-              expires_at: args[24] as number | null,
-              status: args[25] as string,
-              items_json: args[26] as string,
-              folders_json: args[27] as string,
-              item_count: args[28] as number,
-              view_count: args[29] as number,
-              synced_at: args[30] as number,
-              created_at: args[31] as number
+              auto_sync: args[24] as number,
+              expires_at: args[25] as number | null,
+              status: args[26] as string,
+              items_json: args[27] as string,
+              folders_json: args[28] as string,
+              item_count: args[29] as number,
+              view_count: args[30] as number,
+              synced_at: args[31] as number,
+              created_at: args[32] as number
             };
             galleries.set(row.id, row);
           } else if (sql.startsWith('UPDATE galleries SET') && sql.includes('font_preset')) {
-            const id = args[21] as string;
+            const id = args[22] as string;
             const existing = galleries.get(id);
             if (existing) {
               existing.title = args[0] as string;
@@ -141,8 +142,18 @@ function createMemoryDB() {
               existing.cover_file_id = args[16] as string | null;
               existing.allow_download = args[17] as number;
               existing.allow_likes = args[18] as number;
-              existing.password_hash = args[19] as string | null;
-              existing.expires_at = args[20] as number | null;
+              existing.auto_sync = args[19] as number;
+              existing.password_hash = args[20] as string | null;
+              existing.expires_at = args[21] as number | null;
+            }
+          } else if (sql.startsWith('UPDATE galleries SET') && sql.includes('items_json')) {
+            const existing = galleries.get(args[5] as string);
+            if (existing) {
+              existing.items_json = args[0] as string;
+              existing.folders_json = args[1] as string;
+              existing.item_count = args[2] as number;
+              existing.cover_file_id = args[3] as string | null;
+              existing.synced_at = args[4] as number;
             }
           } else if (sql.startsWith('UPDATE galleries SET admin_token_hash')) {
             const existing = galleries.get(args[1] as string);
@@ -757,5 +768,102 @@ describe('Gallery API & Media Proxy security', () => {
       env
     );
     expect(badParamRes.status).toBe(400);
+  });
+
+  it('triggers background auto-sync on stale cache with KV lock and respects autoSync toggle', async () => {
+    const createRes = await app.request(
+      '/api/galleries',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driveUrl: 'https://drive.google.com/drive/folders/folderABC12345'
+        })
+      },
+      env
+    );
+    expect(createRes.status).toBe(201);
+    const created = (await createRes.json()) as {
+      slug: string;
+      gallery: { autoSync: boolean; syncedAt: number };
+    };
+    expect(created.gallery.autoSync).toBe(true);
+    const adminCookie = (createRes.headers.get('set-cookie') || '').split(';')[0];
+
+    // Seed Drive mock to return 2 files on subsequent sync, and make gallery appear stale (> 6h)
+    let driveListCalls = 0;
+    const baseFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = decodeURIComponent(typeof input === 'string' ? input : input.toString());
+      if (url.includes("'folderABC12345'+in+parents")) {
+        driveListCalls += 1;
+        return new Response(
+          JSON.stringify({
+            files: [
+              {
+                id: 'imgFile00001',
+                name: 'portrait.jpg',
+                mimeType: 'image/jpeg',
+                size: '102400',
+                imageMediaMetadata: { width: 1600, height: 2400 }
+              },
+              {
+                id: 'imgFile00002',
+                name: 'new-shot.jpg',
+                mimeType: 'image/jpeg',
+                size: '204800',
+                imageMediaMetadata: { width: 1600, height: 1200 }
+              }
+            ]
+          }),
+          { status: 200 }
+        );
+      }
+      return baseFetch(input, init);
+    }) as typeof fetch;
+
+    const row = await env.DB.prepare('SELECT * FROM galleries WHERE slug = ?1 LIMIT 1')
+      .bind(created.slug)
+      .first<GalleryRow>();
+    expect(row).not.toBeNull();
+    row!.synced_at = Date.now() - 7 * 60 * 60 * 1000;
+
+    const pending: Promise<unknown>[] = [];
+    const execCtx = { waitUntil: (p: Promise<unknown>) => pending.push(p) } as unknown as ExecutionContext;
+
+    const viewRes = await app.fetch(
+      new Request(`http://localhost/api/galleries/${created.slug}`),
+      env,
+      execCtx
+    );
+    expect(viewRes.status).toBe(200);
+    await Promise.all(pending);
+    expect(driveListCalls).toBe(1);
+    expect(await env.CACHE.get(`autosync:${created.slug}`)).toBe('1');
+
+    // Second stale view while KV lock is active does not re-trigger Drive sync
+    row!.synced_at = Date.now() - 7 * 60 * 60 * 1000;
+    const pending2: Promise<unknown>[] = [];
+    await app.fetch(
+      new Request(`http://localhost/api/galleries/${created.slug}`),
+      env,
+      { waitUntil: (p: Promise<unknown>) => pending2.push(p) } as unknown as ExecutionContext
+    );
+    await Promise.all(pending2);
+    expect(driveListCalls).toBe(1);
+
+    // Disable autoSync via Manage PATCH and confirm toggle persists
+    const patchRes = await app.request(
+      `/api/galleries/${created.slug}/manage`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Cookie: adminCookie },
+        body: JSON.stringify({ autoSync: false })
+      },
+      env
+    );
+    expect(patchRes.status).toBe(200);
+    const patched = (await patchRes.json()) as { gallery: { autoSync: boolean } };
+    expect(patched.gallery.autoSync).toBe(false);
   });
 });
