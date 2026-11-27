@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BookOpen, Shuffle } from 'lucide-react';
+import { BookOpen, RefreshCw } from 'lucide-react';
 import { hexToRgba } from '../../shared/customization';
 import { fetchRandomBibleVerse, type BibleVerseResponse } from '../lib/api';
 
@@ -220,8 +220,8 @@ export function VerseTickerBar({ dark = false, customColors }: VerseTickerBarPro
           type="button"
           onClick={handleManualShuffle}
           disabled={shuffling}
-          aria-label="Shuffle ESV verse"
-          title="Load random ESV verse"
+          aria-label="Refresh ESV verse"
+          title="Refresh ESV verse"
           className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition disabled:opacity-50 ${
             customColors
               ? 'hover:opacity-100'
@@ -238,7 +238,7 @@ export function VerseTickerBar({ dark = false, customColors }: VerseTickerBarPro
               : undefined
           }
         >
-          <Shuffle className={`h-3 w-3 ${shuffling ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`h-3 w-3 ${shuffling ? 'animate-spin' : ''}`} />
         </button>
       </div>
     </section>

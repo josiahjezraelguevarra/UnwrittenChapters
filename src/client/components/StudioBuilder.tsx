@@ -25,7 +25,6 @@ export function StudioBuilder({
   onNavigate
 }: StudioBuilderProps) {
   const [driveUrls, setDriveUrls] = useState<string[]>(['']);
-  const [allowDownload, setAllowDownload] = useState(true);
   const [turnstileToken, setTurnstileToken] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -52,7 +51,6 @@ export function StudioBuilder({
       const res = await createGallery({
         driveUrl: cleanedUrls[0],
         driveUrls: cleanedUrls,
-        allowDownload,
         turnstileToken: turnstileToken || undefined
       });
 
@@ -179,31 +177,6 @@ export function StudioBuilder({
                 </div>
               ))}
             </div>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-200 bg-stone-50/75 px-3.5 py-2.5">
-            <div>
-              <p className="text-xs font-semibold text-slate-800">Allow client downloads</p>
-              <p className="text-[11px] text-slate-500">
-                Enable single-file downloads &amp; ZIP export (turn off for view-only proofing)
-              </p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={allowDownload}
-              aria-label="Allow client downloads"
-              onClick={() => setAllowDownload((v) => !v)}
-              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                allowDownload ? 'bg-[#141311]' : 'bg-stone-300'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                  allowDownload ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
           </div>
 
           <p className="flex items-center gap-2 text-xs text-[#141311]/60">
