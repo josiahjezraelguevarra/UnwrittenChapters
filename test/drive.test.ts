@@ -3,7 +3,8 @@ import {
   buildThumbnailSizedUrl,
   DriveError,
   extractDriveFolderId,
-  fetchDriveFolderTree
+  fetchDriveFolderTree,
+  fetchMultiDriveFolderTrees
 } from '../src/server/drive';
 
 describe('extractDriveFolderId', () => {
@@ -141,5 +142,65 @@ describe('fetchDriveFolderTree', () => {
     await expect(fetchDriveFolderTree('folder123456', 'test-key', mockFetch)).rejects.toThrow(
       'josiahjezraelguevarra.bsit@gmail.com'
     );
+  });
+
+  it('combines multiple Drive folders into distinct root chapters and falls back to backup key on 429', async () => {
+    const mockFetch: typeof fetch = async (input) => {
+      const url = decodeURIComponent(typeof input === 'string' ? input : input.toString());
+      if (url.includes('key=primary-key')) {
+        return new Response(JSON.stringify({ error: { message: 'Rate limit exceeded' } }), {
+          status: 429
+        });
+      }
+      if (url.includes('/files/folderOne123?')) {
+        return new Response(
+          JSON.stringify({ id: 'folderOne123', name: 'Ceremony', mimeType: 'application/vnd.google-apps.folder' }),
+          { status: 200 }
+        );
+      }
+      if (url.includes('/files/folderTwo456?')) {
+        return new Response(
+          JSON.stringify({ id: 'folderTwo456', name: 'Reception', mimeType: 'application/vnd.google-apps.folder' }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("'folderOne123'+in+parents")) {
+        return new Response(
+          JSON.stringify({
+            files: [{ id: 'imgA00000001', name: 'vows.jpg', mimeType: 'image/jpeg' }]
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("'folderTwo456'+in+parents")) {
+        return new Response(
+          JSON.stringify({
+            files: [{ id: 'imgB00000002', name: 'dance.jpg', mimeType: 'image/jpeg' }]
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response('{}', { status: 404 });
+    };
+
+    const res = await fetchMultiDriveFolderTrees(
+      ['folderOne123', 'folderTwo456', 'folderOne123'],
+      'primary-key',
+      mockFetch,
+      'backup-key'
+    );
+    expect(res.items).toHaveLength(2);
+    expect(res.items[0].folderPath).toBe('Ceremony');
+    expect(res.items[1].folderPath).toBe('Reception');
+    expect(res.folders.map((f) => f.path)).toEqual(['Ceremony', 'Reception']);
+  });
+
+  it('rejects more than 3 distinct Drive folder links', async () => {
+    await expect(
+      fetchMultiDriveFolderTrees(
+        ['folder000001', 'folder000002', 'folder000003', 'folder000004'],
+        'test-key'
+      )
+    ).rejects.toThrow('up to 3');
   });
 });

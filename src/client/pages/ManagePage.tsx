@@ -17,6 +17,7 @@ import {
   Minimize2,
   Monitor,
   Palette,
+  Plus,
   QrCode,
   RefreshCw,
   RotateCcw,
@@ -127,6 +128,8 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
   const [allowDownload, setAllowDownload] = useState(true);
   const [allowLikes, setAllowLikes] = useState(true);
   const [autoSync, setAutoSync] = useState(true);
+  const [driveSources, setDriveSources] = useState<string[]>([]);
+  const [savedDriveSources, setSavedDriveSources] = useState<string[]>([]);
   const [newPassword, setNewPassword] = useState('');
   const [clearPassword, setClearPassword] = useState(false);
   const [expiryAction, setExpiryAction] = useState<string>('');
@@ -192,6 +195,9 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
         setAuthRequired(false);
         setData(res);
         applyGalleryToForm(res.gallery);
+        const sources = res.driveSources || [];
+        setDriveSources(sources);
+        setSavedDriveSources(sources);
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
           setAuthRequired(true);
@@ -354,6 +360,7 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
       allowDownload !== g.allowDownload ||
       allowLikes !== g.allowLikes ||
       autoSync !== (g.autoSync !== false) ||
+      driveSources.map((s) => s.trim()).filter(Boolean).join('|') !== savedDriveSources.join('|') ||
       Boolean(newPassword.trim()) ||
       clearPassword ||
       expiryAction !== ''
@@ -380,6 +387,8 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
     allowDownload,
     allowLikes,
     autoSync,
+    driveSources,
+    savedDriveSources,
     newPassword,
     clearPassword,
     expiryAction
@@ -388,12 +397,15 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
   const resetDraft = () => {
     if (!data) return;
     applyGalleryToForm(data.gallery);
+    setDriveSources(savedDriveSources);
   };
 
   const handleSave = async (e?: FormEvent) => {
     e?.preventDefault();
     setSaving(true);
     setError('');
+    const cleanedSources = driveSources.map((s) => s.trim()).filter(Boolean);
+    const sourcesChanged = cleanedSources.join('|') !== savedDriveSources.join('|');
     try {
       const res = await updateManageGallery(slug, {
         title,
@@ -416,6 +428,7 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
         allowDownload,
         allowLikes,
         autoSync,
+        ...(sourcesChanged && cleanedSources.length > 0 ? { driveUrls: cleanedSources } : {}),
         ...(expiryAction === 'never'
           ? { expiresInDays: null }
           : expiryAction
@@ -427,9 +440,22 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
             ? { password: newPassword.trim() }
             : {})
       });
-      setData((prev) => (prev ? { ...prev, gallery: res.gallery } : prev));
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              gallery: res.gallery,
+              ...(res.items ? { items: res.items } : {}),
+              ...(res.folders ? { folders: res.folders } : {})
+            }
+          : prev
+      );
+      if (res.driveSources) {
+        setDriveSources(res.driveSources);
+        setSavedDriveSources(res.driveSources);
+      }
       applyGalleryToForm(res.gallery);
-      showToast('Gallery settings saved.');
+      showToast(sourcesChanged ? 'Saved & synced updated Drive folders.' : 'Gallery settings saved.');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to save changes.');
     } finally {
@@ -948,6 +974,53 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
                         className="uc-input mt-1"
                       />
                     </div>
+                  </div>
+
+                  <div className="space-y-2.5 border-t border-stone-200/80 pt-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+                        Linked Drive Folders ({driveSources.length}/3)
+                      </p>
+                      {driveSources.length < 3 && (
+                        <button
+                          type="button"
+                          onClick={() => setDriveSources((prev) => [...prev, ''])}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700 hover:text-slate-950"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          <span>Add Link</span>
+                        </button>
+                      )}
+                    </div>
+                    {driveSources.map((src, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          required={idx === 0}
+                          aria-label={`Google Drive folder link ${idx + 1}`}
+                          value={src}
+                          onChange={(e) => {
+                            const next = [...driveSources];
+                            next[idx] = e.target.value;
+                            setDriveSources(next);
+                          }}
+                          placeholder="https://drive.google.com/drive/folders/..."
+                          className="uc-input flex-1 text-xs"
+                        />
+                        {driveSources.length > 1 && (
+                          <button
+                            type="button"
+                            aria-label={`Remove Drive link ${idx + 1}`}
+                            onClick={() =>
+                              setDriveSources((prev) => prev.filter((_, i) => i !== idx))
+                            }
+                            className="flex min-h-[40px] min-w-[40px] items-center justify-center rounded-xl border border-stone-300 text-slate-600 hover:bg-stone-100"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

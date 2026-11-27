@@ -67,6 +67,7 @@ export interface PublicGalleryConfig {
   hasPassword: boolean;
   expiresAt: number | null;
   itemCount: number;
+  sourceCount?: number;
   viewCount: number;
   syncedAt: number;
   createdAt: number;

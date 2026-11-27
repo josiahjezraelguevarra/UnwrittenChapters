@@ -100,7 +100,8 @@ export async function fetchAppConfig(): Promise<AppPublicConfig> {
 }
 
 export interface CreateGalleryPayload {
-  driveUrl: string;
+  driveUrl?: string;
+  driveUrls?: string[];
   title?: string;
   description?: string;
   brandName?: string;
@@ -178,6 +179,7 @@ export async function toggleLike(
 export interface ManageGalleryResponse {
   gallery: PublicGalleryConfig;
   driveFolderId: string;
+  driveSources?: string[];
   items: MediaItem[];
   folders: GalleryFolder[];
   likeCounts: Record<string, number>;
@@ -218,7 +220,12 @@ export async function updateManageGallery(
   slug: string,
   patch: Record<string, unknown>,
   adminToken?: string
-): Promise<{ gallery: PublicGalleryConfig }> {
+): Promise<{
+  gallery: PublicGalleryConfig;
+  items?: MediaItem[];
+  folders?: GalleryFolder[];
+  driveSources?: string[];
+}> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (adminToken) headers.Authorization = `Bearer ${adminToken}`;
   const res = await fetch(`/api/galleries/${encodeURIComponent(slug)}/manage`, {
@@ -227,7 +234,7 @@ export async function updateManageGallery(
     headers,
     body: JSON.stringify(patch)
   });
-  return parseJson<{ gallery: PublicGalleryConfig }>(res);
+  return parseJson(res);
 }
 
 export async function syncGalleryDrive(

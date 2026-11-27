@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type RefObject } from 'react';
-import { ArrowRight, Link2, Loader2, Sparkles } from 'lucide-react';
+import { ArrowRight, Link2, Loader2, Plus, Sparkles, X } from 'lucide-react';
 import type { AppPublicConfig } from '../../shared/types';
 import {
   ApiError,
@@ -24,7 +24,7 @@ export function StudioBuilder({
   onGalleryCreated,
   onNavigate
 }: StudioBuilderProps) {
-  const [driveUrl, setDriveUrl] = useState('');
+  const [driveUrls, setDriveUrls] = useState<string[]>(['']);
   const [turnstileToken, setTurnstileToken] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -35,7 +35,8 @@ export function StudioBuilder({
     e.preventDefault();
     setError('');
 
-    if (!driveUrl.trim()) {
+    const cleanedUrls = driveUrls.map((u) => u.trim()).filter(Boolean);
+    if (cleanedUrls.length === 0) {
       setError('Please paste a Google Drive folder link.');
       return;
     }
@@ -48,7 +49,8 @@ export function StudioBuilder({
     setSubmitting(true);
     try {
       const res = await createGallery({
-        driveUrl: driveUrl.trim(),
+        driveUrl: cleanedUrls[0],
+        driveUrls: cleanedUrls,
         turnstileToken: turnstileToken || undefined
       });
 
@@ -99,45 +101,81 @@ export function StudioBuilder({
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label
-              htmlFor="drive-url"
-              className="block text-sm font-semibold text-slate-800"
-            >
-              Public Google Drive Folder Link
-            </label>
-            <div className="mt-2 flex flex-col gap-3 sm:flex-row">
-              <div className="relative flex-1">
-                <Link2
-                  className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-slate-400"
-                />
-                <input
-                  ref={driveInputRef}
-                  id="drive-url"
-                  type="text"
-                  required
-                  value={driveUrl}
-                  onChange={(e) => setDriveUrl(e.target.value)}
-                  placeholder="https://drive.google.com/drive/folders/..."
-                  className="uc-input min-h-[48px] py-2.5 pr-3.5 pl-10"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="inline-flex min-h-[48px] shrink-0 items-center justify-center gap-2 rounded-xl bg-[#141311] px-6 py-2.5 text-sm font-semibold text-[#f8f6f2] transition hover:bg-[#2a2824] disabled:cursor-not-allowed disabled:opacity-50"
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label
+                htmlFor="drive-url"
+                className="block text-sm font-semibold text-slate-800"
               >
-                {submitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Scanning Drive...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Create Gallery</span>
-                    <ArrowRight className="h-4 w-4" />
-                  </>
-                )}
-              </button>
+                Public Google Drive Folder Link{driveUrls.length > 1 ? 's' : ''}
+              </label>
+              {driveUrls.length < 3 && (
+                <button
+                  type="button"
+                  onClick={() => setDriveUrls((prev) => (prev.length < 3 ? [...prev, ''] : prev))}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700 underline underline-offset-2 hover:text-slate-950"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Add another Drive link (up to 3)</span>
+                </button>
+              )}
+            </div>
+            <div className="mt-2 space-y-2.5">
+              {driveUrls.map((urlVal, idx) => (
+                <div key={idx} className="flex flex-col gap-2 sm:flex-row">
+                  <div className="relative flex-1">
+                    <Link2
+                      className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-slate-400"
+                    />
+                    <input
+                      ref={idx === 0 ? driveInputRef : undefined}
+                      id={idx === 0 ? 'drive-url' : `drive-url-${idx}`}
+                      type="text"
+                      required={idx === 0}
+                      value={urlVal}
+                      onChange={(e) => {
+                        const next = [...driveUrls];
+                        next[idx] = e.target.value;
+                        setDriveUrls(next);
+                      }}
+                      placeholder={
+                        idx === 0
+                          ? 'https://drive.google.com/drive/folders/...'
+                          : `Extra Drive folder link #${idx + 1} (optional)`
+                      }
+                      className="uc-input min-h-[48px] py-2.5 pr-3.5 pl-10"
+                    />
+                  </div>
+                  {idx > 0 && (
+                    <button
+                      type="button"
+                      aria-label={`Remove Drive link ${idx + 1}`}
+                      onClick={() => setDriveUrls((prev) => prev.filter((_, i) => i !== idx))}
+                      className="inline-flex min-h-[48px] shrink-0 items-center justify-center rounded-xl border border-stone-300 px-3 text-xs font-medium text-slate-600 hover:bg-stone-100"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                  {idx === 0 && (
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      className="inline-flex min-h-[48px] shrink-0 items-center justify-center gap-2 rounded-xl bg-[#141311] px-6 py-2.5 text-sm font-semibold text-[#f8f6f2] transition hover:bg-[#2a2824] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {submitting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Scanning Drive...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Create Gallery</span>
+                          <ArrowRight className="h-4 w-4" />
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 

@@ -87,40 +87,41 @@ function createMemoryDB() {
               id: args[0] as string,
               slug: args[1] as string,
               drive_folder_id: args[2] as string,
-              title: args[3] as string,
-              description: args[4] as string,
-              cover_file_id: args[5] as string | null,
-              layout: args[6] as GalleryRow['layout'],
-              theme: args[7] as GalleryRow['theme'],
-              font_preset: args[8] as GalleryRow['font_preset'],
-              accent_color: args[9] as string,
-              background_color: args[10] as string,
-              surface_color: args[11] as string,
-              text_color: args[12] as string,
-              hero_style: args[13] as GalleryRow['hero_style'],
-              card_style: args[14] as GalleryRow['card_style'],
-              caption_mode: args[15] as GalleryRow['caption_mode'],
-              grid_gap: args[16] as GalleryRow['grid_gap'],
-              card_radius: args[17] as GalleryRow['card_radius'],
-              brand_name: args[18] as string,
-              brand_url: args[19] as string,
-              password_hash: args[20] as string | null,
-              admin_token_hash: args[21] as string,
-              allow_download: args[22] as number,
-              allow_likes: args[23] as number,
-              auto_sync: args[24] as number,
-              expires_at: args[25] as number | null,
-              status: args[26] as string,
-              items_json: args[27] as string,
-              folders_json: args[28] as string,
-              item_count: args[29] as number,
-              view_count: args[30] as number,
-              synced_at: args[31] as number,
-              created_at: args[32] as number
+              drive_sources_json: args[3] as string,
+              title: args[4] as string,
+              description: args[5] as string,
+              cover_file_id: args[6] as string | null,
+              layout: args[7] as GalleryRow['layout'],
+              theme: args[8] as GalleryRow['theme'],
+              font_preset: args[9] as GalleryRow['font_preset'],
+              accent_color: args[10] as string,
+              background_color: args[11] as string,
+              surface_color: args[12] as string,
+              text_color: args[13] as string,
+              hero_style: args[14] as GalleryRow['hero_style'],
+              card_style: args[15] as GalleryRow['card_style'],
+              caption_mode: args[16] as GalleryRow['caption_mode'],
+              grid_gap: args[17] as GalleryRow['grid_gap'],
+              card_radius: args[18] as GalleryRow['card_radius'],
+              brand_name: args[19] as string,
+              brand_url: args[20] as string,
+              password_hash: args[21] as string | null,
+              admin_token_hash: args[22] as string,
+              allow_download: args[23] as number,
+              allow_likes: args[24] as number,
+              auto_sync: args[25] as number,
+              expires_at: args[26] as number | null,
+              status: args[27] as string,
+              items_json: args[28] as string,
+              folders_json: args[29] as string,
+              item_count: args[30] as number,
+              view_count: args[31] as number,
+              synced_at: args[32] as number,
+              created_at: args[33] as number
             };
             galleries.set(row.id, row);
           } else if (sql.startsWith('UPDATE galleries SET') && sql.includes('font_preset')) {
-            const id = args[22] as string;
+            const id = args[24] as string;
             const existing = galleries.get(id);
             if (existing) {
               existing.title = args[0] as string;
@@ -145,6 +146,8 @@ function createMemoryDB() {
               existing.auto_sync = args[19] as number;
               existing.password_hash = args[20] as string | null;
               existing.expires_at = args[21] as number | null;
+              existing.drive_folder_id = args[22] as string;
+              existing.drive_sources_json = args[23] as string;
             }
           } else if (sql.startsWith('UPDATE galleries SET') && sql.includes('items_json')) {
             const existing = galleries.get(args[5] as string);
@@ -872,5 +875,47 @@ describe('Gallery API & Media Proxy security', () => {
     expect(res.status).toBe(200);
     const xml = await res.text();
     expect(xml).toContain('/tools');
+  });
+
+  it('rejects more than 3 Drive links on gallery creation and defaults heroStyle to fullscreen', async () => {
+    const tooManyRes = await app.request(
+      '/api/galleries',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driveUrls: [
+            'https://drive.google.com/drive/folders/folderOne1234',
+            'https://drive.google.com/drive/folders/folderTwo1234',
+            'https://drive.google.com/drive/folders/folderThree34',
+            'https://drive.google.com/drive/folders/folderFour123'
+          ]
+        })
+      },
+      env
+    );
+    expect(tooManyRes.status).toBe(400);
+    const tooManyBody = (await tooManyRes.json()) as { code?: string };
+    expect(tooManyBody.code).toBe('TOO_MANY_DRIVE_SOURCES');
+
+    const okRes = await app.request(
+      '/api/galleries',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driveUrl: 'https://drive.google.com/drive/folders/folderABC12345',
+          allowDownload: false
+        })
+      },
+      env
+    );
+    expect(okRes.status).toBe(201);
+    const okBody = (await okRes.json()) as {
+      gallery: { heroStyle: string; allowDownload: boolean; sourceCount: number };
+    };
+    expect(okBody.gallery.heroStyle).toBe('fullscreen');
+    expect(okBody.gallery.allowDownload).toBe(false);
+    expect(okBody.gallery.sourceCount).toBe(1);
   });
 });
