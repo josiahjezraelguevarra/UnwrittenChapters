@@ -222,13 +222,15 @@ export function GallerySurface({
 
   const renderBrandHeader = () => (
     <div className="flex flex-wrap items-center justify-between gap-4">
-      <span className="inline-flex items-center gap-2 text-sm font-semibold tracking-wide uppercase opacity-85">
+      <span className="inline-flex items-center gap-2.5">
         <img
           src="/logo.svg"
           alt=""
-          className="h-6 w-6 object-contain"
+          className="h-7 w-7 shrink-0 object-contain sm:h-8 sm:w-8"
         />
-        <span>{appName}</span>
+        <span className="uc-font-serif text-lg font-semibold tracking-tight sm:text-xl">
+          {appName}
+        </span>
       </span>
 
       <button
