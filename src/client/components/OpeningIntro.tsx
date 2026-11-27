@@ -1,5 +1,23 @@
 import { useEffect, useState } from 'react';
 
+export const INTRO_SEEN_KEY = 'uc_intro_seen';
+
+export function hasSeenIntro(): boolean {
+  try {
+    return localStorage.getItem(INTRO_SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markIntroSeen(): void {
+  try {
+    localStorage.setItem(INTRO_SEEN_KEY, '1');
+  } catch {
+    // Ignore storage quota / privacy mode errors
+  }
+}
+
 interface OpeningIntroProps {
   brandText?: string;
   dark?: boolean;
@@ -13,11 +31,12 @@ export function OpeningIntro({
   dark = false,
   onComplete
 }: OpeningIntroProps) {
-  const [phase, setPhase] = useState<IntroPhase>('typing');
+  const [phase, setPhase] = useState<IntroPhase>(() => (hasSeenIntro() ? 'done' : 'typing'));
   const [charCount, setCharCount] = useState(0);
 
   useEffect(() => {
     if (phase === 'done') {
+      markIntroSeen();
       onComplete();
       return;
     }

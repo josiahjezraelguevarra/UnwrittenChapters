@@ -12,7 +12,7 @@ import type {
 } from '../../shared/types';
 import { buildSupportMailto } from '../../shared/contact';
 import { HeroGalleryMockup } from '../components/HeroGalleryMockup';
-import { OpeningIntro } from '../components/OpeningIntro';
+import { OpeningIntro, hasSeenIntro } from '../components/OpeningIntro';
 import { StudioBuilder } from '../components/StudioBuilder';
 import { VerseTickerBar } from '../components/VerseTickerBar';
 import {
@@ -116,7 +116,7 @@ export function HomePage({
 
   const isDark = homeTheme === 'dark';
 
-  const [introDone, setIntroDone] = useState(false);
+  const [introDone, setIntroDone] = useState(() => hasSeenIntro());
   const handleIntroComplete = useCallback(() => setIntroDone(true), []);
 
   const driveInputRef = useRef<HTMLInputElement>(null);
