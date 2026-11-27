@@ -268,7 +268,7 @@ export function GallerySurface({
 
   return (
     <div
-      className={`${previewMode ? 'min-h-full' : 'min-h-screen pb-12'} transition-colors duration-200`}
+      className={`${previewMode ? 'min-h-full' : 'min-h-screen pb-[calc(5.5rem+env(safe-area-inset-bottom))]'} transition-colors duration-200`}
       style={
         {
           backgroundColor: tokens.bg,
@@ -489,11 +489,11 @@ export function GallerySurface({
         }}
       >
         <div
-          className={`mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2.5 px-4 py-2.5 ${
+          className={`mx-auto flex max-w-6xl flex-col gap-2 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between ${
             previewMode ? '' : 'sm:px-6 sm:py-3'
           }`}
         >
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 sm:flex-wrap sm:gap-2 sm:overflow-visible sm:pb-0">
             {(
               [
                 ['all', `All (${items.length})`],
@@ -510,7 +510,7 @@ export function GallerySurface({
                   key={key}
                   type="button"
                   onClick={() => onMediaFilterChange(key)}
-                  className="min-h-[36px] rounded-full px-3 text-xs font-medium transition hover:opacity-90"
+                  className="min-h-[38px] shrink-0 rounded-full px-3 text-xs font-medium whitespace-nowrap transition hover:opacity-90"
                   style={
                     active
                       ? activeAccentStyle
@@ -526,7 +526,7 @@ export function GallerySurface({
             })}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-2 sm:justify-end">
             <div
               role="group"
               aria-label="Layout mode"
@@ -554,7 +554,7 @@ export function GallerySurface({
                     aria-pressed={active}
                     title={label}
                     onClick={() => onLayoutChange(mode)}
-                    className={`flex min-h-[32px] min-w-[32px] items-center justify-center rounded-md transition ${
+                    className={`flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md transition sm:min-h-[32px] sm:min-w-[32px] ${
                       active ? 'shadow-2xs' : 'opacity-60 hover:opacity-100'
                     }`}
                     style={
@@ -574,7 +574,7 @@ export function GallerySurface({
                 type="button"
                 disabled={Boolean(zipProgress)}
                 onClick={previewMode ? undefined : onBatchDownload}
-                className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl px-3.5 text-xs font-semibold transition hover:opacity-90 disabled:opacity-75"
+                className="inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold transition hover:opacity-90 disabled:opacity-75 sm:px-3.5"
                 style={activeAccentStyle}
               >
                 {zipProgress ? (
@@ -587,7 +587,8 @@ export function GallerySurface({
                 ) : (
                   <>
                     <Download className="h-3.5 w-3.5" />
-                    <span>Download ZIP ({filteredItems.length})</span>
+                    <span className="sm:hidden">ZIP ({filteredItems.length})</span>
+                    <span className="hidden sm:inline">Download ZIP ({filteredItems.length})</span>
                   </>
                 )}
               </button>

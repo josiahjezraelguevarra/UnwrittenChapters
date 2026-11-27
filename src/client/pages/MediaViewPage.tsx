@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -63,6 +63,7 @@ export function MediaViewPage({ slug, fileId, config, onNavigate }: MediaViewPag
   const [visitorLikes, setVisitorLikes] = useState<Set<string>>(new Set());
   const [zoomed, setZoomed] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const folderParam = useMemo(() => {
     const q = new URLSearchParams(window.location.search).get('folder');
@@ -397,9 +398,27 @@ export function MediaViewPage({ slug, fileId, config, onNavigate }: MediaViewPag
       </header>
 
       {/* Dedicated Picture or Video Stage */}
-      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 px-4 py-5 sm:px-6">
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-3 py-4 pb-16 sm:gap-5 sm:px-6 sm:py-5">
         <div
-          className="relative flex flex-1 items-center justify-center overflow-hidden rounded-2xl border p-2 sm:p-4"
+          onTouchStart={(e) => {
+            if (zoomed || e.touches.length !== 1) return;
+            touchStartRef.current = {
+              x: e.touches[0].clientX,
+              y: e.touches[0].clientY
+            };
+          }}
+          onTouchEnd={(e) => {
+            const start = touchStartRef.current;
+            touchStartRef.current = null;
+            if (!start || zoomed || e.changedTouches.length === 0) return;
+            const dx = e.changedTouches[0].clientX - start.x;
+            const dy = e.changedTouches[0].clientY - start.y;
+            if (Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+              if (dx > 0 && prevItem) navigateToSibling(prevItem.id);
+              else if (dx < 0 && nextItem) navigateToSibling(nextItem.id);
+            }
+          }}
+          className="relative flex flex-1 touch-pan-y items-center justify-center overflow-hidden rounded-2xl border p-2 sm:p-4"
           style={{
             borderColor: tokens.border,
             backgroundColor: isVideo ? '#09090b' : tokens.surface
@@ -490,6 +509,7 @@ export function MediaViewPage({ slug, fileId, config, onNavigate }: MediaViewPag
           </div>
 
           <div className="flex items-center gap-2 text-xs" style={{ color: tokens.mutedFg }}>
+            <span className="sm:hidden">Swipe left / right</span>
             <span className="hidden sm:inline">Use ← / → keys to switch {isVideo ? 'videos' : 'photos'}</span>
           </div>
         </div>

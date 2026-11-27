@@ -149,7 +149,7 @@ export function HomePage({
       <OpeningIntro brandText={config.appName} dark={isDark} onComplete={handleIntroComplete} />
 
       <div
-        className={`uc-font-sans min-h-screen pb-12 transition-colors ${
+        className={`uc-font-sans min-h-screen pb-20 transition-colors ${
           isDark
             ? 'uc-home-dark bg-[#12110f] text-[#f4f1ea]'
             : 'bg-[#f8f6f2] text-[#141311]'

@@ -244,13 +244,14 @@
 }
 
 .masonry-columns {
-  column-count: 1;
-  column-gap: var(--gallery-gap, 1rem);
+  column-count: 2;
+  column-gap: clamp(0.35rem, var(--gallery-gap, 0.75rem), 0.75rem);
 }
 
 @media (min-width: 640px) {
   .masonry-columns {
     column-count: 2;
+    column-gap: var(--gallery-gap, 1rem);
   }
 }
 
@@ -284,14 +285,22 @@
 }
 
 .justified-item {
-  height: 220px;
+  height: 155px;
   flex-grow: 1;
-  min-width: 180px;
+  min-width: 120px;
   max-width: 100%;
+}
+
+@media (min-width: 640px) {
+  .justified-item {
+    height: 220px;
+    min-width: 170px;
+  }
 }
 
 @media (min-width: 768px) {
   .justified-item {
     height: 260px;
+    min-width: 180px;
   }
 }
