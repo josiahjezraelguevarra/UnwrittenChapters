@@ -140,7 +140,7 @@ describe('fetchDriveFolderTree', () => {
         status: 403
       });
     await expect(fetchDriveFolderTree('folder123456', 'test-key', mockFetch)).rejects.toThrow(
-      'josiahjezraelguevarra.bsit@gmail.com'
+      'unwrittenchapters.support@gmail.com'
     );
   });
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { canUsePreferenceStorage } from '../lib/cookieConsent';
 
 export const INTRO_SEEN_KEY = 'uc_intro_seen';
 
@@ -11,6 +12,7 @@ export function hasSeenIntro(): boolean {
 }
 
 function markIntroSeen(): void {
+  if (!canUsePreferenceStorage()) return;
   try {
     localStorage.setItem(INTRO_SEEN_KEY, '1');
   } catch {
@@ -99,9 +101,7 @@ export function OpeningIntro({
             <img
               src="/logo.svg"
               alt=""
-              className={`mx-auto mb-4 h-14 w-14 object-contain sm:h-16 sm:w-16 ${
-                dark ? 'invert' : ''
-              }`}
+              className="mx-auto mb-4 h-14 w-14 object-contain sm:h-16 sm:w-16"
             />
             <p className="text-sm font-medium opacity-55">
               Zero-account gallery delivery

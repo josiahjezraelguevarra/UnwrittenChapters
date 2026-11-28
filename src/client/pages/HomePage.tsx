@@ -48,6 +48,7 @@ interface HomePageProps {
   homeTheme: 'light' | 'dark';
   onToggleHomeTheme: (event: MouseEvent<HTMLButtonElement>) => void;
   onOpenDonate: () => void;
+  onOpenCookieSettings: () => void;
   onNavigate: (path: string) => void;
 }
 
@@ -148,6 +149,7 @@ export function HomePage({
   homeTheme,
   onToggleHomeTheme,
   onOpenDonate,
+  onOpenCookieSettings,
   onNavigate
 }: HomePageProps) {
   usePageSeo({
@@ -296,9 +298,7 @@ export function HomePage({
               <img
                 src="/logo.svg"
                 alt=""
-                className={`h-7 w-7 shrink-0 object-contain sm:h-9 sm:w-9 ${
-                  isDark ? 'invert' : ''
-                }`}
+                className="h-7 w-7 shrink-0 object-contain sm:h-9 sm:w-9"
               />
               <span className="uc-font-serif truncate text-base font-semibold tracking-tight sm:text-xl">
                 {config.appName}
@@ -803,7 +803,7 @@ export function HomePage({
               <img
                 src="/logo.svg"
                 alt=""
-                className={`h-5 w-5 shrink-0 object-contain ${isDark ? 'invert' : ''}`}
+                className="h-5 w-5 shrink-0 object-contain"
               />
               <span>{config.appName}</span>
               <span className={`uc-font-sans text-[13px] font-normal tracking-normal ${mutedText}`}>
@@ -811,25 +811,6 @@ export function HomePage({
               </span>
             </p>
             <div className="flex flex-wrap items-center gap-4">
-              <a href="#about" className="hover:opacity-100">
-                About
-              </a>
-              <a href="#how-it-works" className="hover:opacity-100">
-                How It Works
-              </a>
-              <a
-                href="/tools"
-                onClick={(e) => {
-                  e.preventDefault();
-                  onNavigate('/tools');
-                }}
-                className="hover:opacity-100"
-              >
-                Free Photo Tools
-              </a>
-              <a href="#donate" className="hover:opacity-100">
-                Donate
-              </a>
               <a
                 href={config.feedbackFormUrl || buildSupportMailto('Feedback & Suggestions')}
                 target={config.feedbackFormUrl ? '_blank' : undefined}
@@ -838,6 +819,33 @@ export function HomePage({
               >
                 Feedback &amp; Suggestions
               </a>
+              <a
+                href="/privacy"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onNavigate('/privacy');
+                }}
+                className="hover:opacity-100"
+              >
+                Data Privacy
+              </a>
+              <a
+                href="/terms"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onNavigate('/terms');
+                }}
+                className="hover:opacity-100"
+              >
+                Terms of Use
+              </a>
+              <button
+                type="button"
+                onClick={onOpenCookieSettings}
+                className="hover:opacity-100"
+              >
+                Cookie Settings
+              </button>
               <button
                 type="button"
                 onClick={() => scrollToSection('create', true)}

@@ -14,6 +14,7 @@ import type {
   PublicGalleryConfig,
   RecentGalleryEntry
 } from '../../shared/types';
+import { canUsePreferenceStorage } from './cookieConsent';
 
 const VISITOR_KEY = 'uc_visitor_id';
 const RECENT_KEY = 'uc_recent_galleries';
@@ -48,7 +49,9 @@ export function getOrCreateVisitorId(): string {
       return existing;
     }
     const generated = crypto.randomUUID().replace(/-/g, '');
-    localStorage.setItem(VISITOR_KEY, generated);
+    if (canUsePreferenceStorage()) {
+      localStorage.setItem(VISITOR_KEY, generated);
+    }
     return generated;
   } catch {
     return 'anonymous_visitor';
@@ -71,6 +74,7 @@ export function getRecentGalleries(): RecentGalleryEntry[] {
 }
 
 export function saveRecentGallery(entry: RecentGalleryEntry): void {
+  if (!canUsePreferenceStorage()) return;
   try {
     // Never persist secret #manageToken fragments in localStorage
     const sanitizedEntry: RecentGalleryEntry = {

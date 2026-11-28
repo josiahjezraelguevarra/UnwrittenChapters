@@ -2,10 +2,18 @@ import { Suspense, lazy, useCallback, useEffect, useState, type MouseEvent } fro
 import { flushSync } from 'react-dom';
 import { FEEDBACK_FORM_URL, REPORT_FORM_URL } from '../shared/contact';
 import type { AppPublicConfig } from '../shared/types';
+import { CookieConsentBanner } from './components/CookieConsentBanner';
 import { DonateModal } from './components/DonateModal';
 import { fetchAppConfig } from './lib/api';
+import {
+  canUsePreferenceStorage,
+  loadCookieConsent,
+  saveCookieConsent,
+  type CookieConsentChoice
+} from './lib/cookieConsent';
 import { GalleryPage } from './pages/GalleryPage';
 import { HomePage } from './pages/HomePage';
+import { LegalPage } from './pages/LegalPage';
 import { ManagePage } from './pages/ManagePage';
 import { MediaViewPage } from './pages/MediaViewPage';
 
@@ -37,15 +45,21 @@ export function App() {
   const [config, setConfig] = useState<AppPublicConfig>(DEFAULT_CONFIG);
   const [donateOpen, setDonateOpen] = useState(false);
   const [homeTheme, setHomeTheme] = useState<'light' | 'dark'>(loadInitialHomeTheme);
+  const [cookieConsent, setCookieConsent] = useState<CookieConsentChoice | null>(() =>
+    loadCookieConsent()
+  );
+  const [cookieBannerOpen, setCookieBannerOpen] = useState(() => loadCookieConsent() === null);
 
   const toggleHomeTheme = useCallback((event?: MouseEvent<HTMLElement>) => {
     const commitThemeToggle = () => {
       setHomeTheme((prev) => {
         const next = prev === 'dark' ? 'light' : 'dark';
-        try {
-          localStorage.setItem(HOME_THEME_KEY, next);
-        } catch {
-          // Ignore storage errors
+        if (canUsePreferenceStorage()) {
+          try {
+            localStorage.setItem(HOME_THEME_KEY, next);
+          } catch {
+            // Ignore storage errors
+          }
         }
         return next;
       });
@@ -136,6 +150,11 @@ export function App() {
   const mediaViewMatch = pathname.match(/^\/g\/([a-zA-Z0-9_-]+)\/view\/([a-zA-Z0-9_-]+)\/?$/);
   const galleryMatch = pathname.match(/^\/g\/([a-zA-Z0-9_-]+)\/?$/);
   const isToolsRoute = pathname === '/tools' || pathname === '/tools/';
+  const isPrivacyRoute = pathname === '/privacy' || pathname === '/privacy/';
+  const isTermsRoute = pathname === '/terms' || pathname === '/terms/';
+  const isHomeRoute =
+    !manageMatch && !mediaViewMatch && !galleryMatch && !isToolsRoute && !isPrivacyRoute && !isTermsRoute;
+  const isHomeDark = (isHomeRoute || isPrivacyRoute || isTermsRoute) && homeTheme === 'dark';
 
   return (
     <>
@@ -165,12 +184,21 @@ export function App() {
         >
           <ToolsPage config={config} onNavigate={navigate} />
         </Suspense>
+      ) : isPrivacyRoute || isTermsRoute ? (
+        <LegalPage
+          kind={isPrivacyRoute ? 'privacy' : 'terms'}
+          config={config}
+          dark={homeTheme === 'dark'}
+          onNavigate={navigate}
+          onOpenCookieSettings={() => setCookieBannerOpen(true)}
+        />
       ) : (
         <HomePage
           config={config}
           homeTheme={homeTheme}
           onToggleHomeTheme={toggleHomeTheme}
           onOpenDonate={() => setDonateOpen(true)}
+          onOpenCookieSettings={() => setCookieBannerOpen(true)}
           onNavigate={navigate}
         />
       )}
@@ -180,7 +208,21 @@ export function App() {
         onClose={() => setDonateOpen(false)}
         appName={config.appName}
         donateUrl={config.donateUrl}
-        dark={!manageMatch && !mediaViewMatch && !galleryMatch && !isToolsRoute && homeTheme === 'dark'}
+        dark={isHomeDark}
+      />
+
+      <CookieConsentBanner
+        open={cookieBannerOpen}
+        initialPreferences={cookieConsent?.preferences ?? true}
+        canDismiss={cookieConsent !== null}
+        hasBottomTicker={isHomeRoute || Boolean(galleryMatch)}
+        onNavigate={navigate}
+        onSaveConsent={(preferences) => {
+          const saved = saveCookieConsent(preferences);
+          setCookieConsent(saved);
+          setCookieBannerOpen(false);
+        }}
+        onDismiss={() => setCookieBannerOpen(false)}
       />
     </>
   );

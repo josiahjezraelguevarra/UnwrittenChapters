@@ -1,4 +1,4 @@
-export const SUPPORT_EMAIL = 'josiahjezraelguevarra.bsit@gmail.com';
+export const SUPPORT_EMAIL = 'unwrittenchapters.support@gmail.com';
 
 // Paste your Google Forms URLs here (or set PUBLIC_FEEDBACK_FORM_URL / PUBLIC_REPORT_FORM_URL in wrangler/vars)
 export const FEEDBACK_FORM_URL = 'https://forms.gle/WMc6seyhcdsagxwF7';
