@@ -288,6 +288,62 @@
   animation: uc-hero-bounce 2s ease-in-out infinite;
 }
 
+@keyframes uc-float-slow {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-6deg);
+  }
+  50% {
+    transform: translateY(-7px) rotate(-4deg);
+  }
+}
+
+@keyframes uc-float-delayed {
+  0%,
+  100% {
+    transform: translateY(0) rotate(6deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(8deg);
+  }
+}
+
+@keyframes uc-pulse-ring {
+  0%,
+  100% {
+    transform: scale(0.96);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.85;
+  }
+}
+
+.uc-float-slow {
+  animation: uc-float-slow 5.2s ease-in-out infinite;
+}
+
+.uc-float-delayed {
+  animation: uc-float-delayed 5.8s ease-in-out 0.6s infinite;
+}
+
+.uc-pulse-ring {
+  animation: uc-pulse-ring 3.4s ease-in-out infinite;
+}
+
+.uc-stagger-1 {
+  animation: uc-slide-reveal 520ms cubic-bezier(0.16, 1, 0.3, 1) 40ms both;
+}
+
+.uc-stagger-2 {
+  animation: uc-slide-reveal 560ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
+}
+
+.uc-stagger-3 {
+  animation: uc-slide-reveal 600ms cubic-bezier(0.16, 1, 0.3, 1) 200ms both;
+}
+
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation: none;
@@ -314,7 +370,13 @@ html.uc-theme-transition *::after {
   .uc-dropdown-menu,
   .uc-hero-zoom,
   .uc-slide-reveal,
-  .uc-hero-bounce {
+  .uc-hero-bounce,
+  .uc-float-slow,
+  .uc-float-delayed,
+  .uc-pulse-ring,
+  .uc-stagger-1,
+  .uc-stagger-2,
+  .uc-stagger-3 {
     animation: none;
   }
 

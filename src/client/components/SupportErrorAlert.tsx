@@ -20,7 +20,7 @@ export function SupportErrorAlert({
       <p className="font-medium">{message}</p>
       <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-red-800/90">
         <Mail className="h-3.5 w-3.5 shrink-0" />
-        <span>API quota exhausted, hosting error, or need help? Email</span>
+        <span>Experiencing a problem or need help? Contact</span>
         <a
           href={buildSupportMailto(context)}
           className="font-semibold underline underline-offset-2 hover:text-red-950"

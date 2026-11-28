@@ -7,6 +7,6 @@ export const REPORT_FORM_URL = 'https://forms.gle/6vnSTLan1Pc5CZih9';
 export function buildSupportMailto(context?: string): string {
   const subject = context
     ? `UnwrittenChapters Support — ${context}`
-    : 'UnwrittenChapters Support — API or Hosting Issue';
+    : 'UnwrittenChapters Support';
   return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}`;
 }

@@ -41,7 +41,6 @@ import type {
   PublicGalleryConfig
 } from '../../shared/types';
 import { sanitizeHexColor, type GalleryPalettePreset } from '../../shared/customization';
-import { SUPPORT_EMAIL, buildSupportMailto } from '../../shared/contact';
 import { ConfirmDeleteModal } from '../components/ConfirmDeleteModal';
 import { CustomSelect, type CustomSelectOption } from '../components/CustomSelect';
 import {
@@ -50,6 +49,7 @@ import {
 } from '../components/GalleryStyleControls';
 import { GallerySurface, type MediaFilter } from '../components/GallerySurface';
 import { QrShareModal } from '../components/QrShareModal';
+import { StatusErrorPage } from '../components/StatusErrorPage';
 import { SupportErrorAlert } from '../components/SupportErrorAlert';
 import { ToggleField } from '../components/ToggleField';
 import {
@@ -666,25 +666,19 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
 
   if (!data) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center bg-stone-50 px-4 text-center">
-        <p className="text-base font-medium text-red-700">{error || 'Unauthorized.'}</p>
-        <p className="mt-2 max-w-md text-xs text-slate-600">
-          API or hosting trouble? Contact{' '}
-          <a
-            href={buildSupportMailto(`Manage /g/${slug}`)}
-            className="font-semibold text-slate-900 underline underline-offset-2"
-          >
-            {SUPPORT_EMAIL}
-          </a>
-        </p>
-        <button
-          type="button"
-          onClick={() => onNavigate('/')}
-          className="mt-4 min-h-[40px] rounded-xl bg-slate-900 px-4 text-sm font-medium text-white"
-        >
-          Back Home
-        </button>
-      </main>
+      <StatusErrorPage
+        code="404"
+        variant="error"
+        title="Unable to Open Manage Page"
+        message={error || 'Unauthorized or gallery not found.'}
+        supportContext={`Manage /g/${slug}`}
+        onNavigateHome={() => onNavigate('/')}
+        primaryAction={{
+          label: 'Back Home',
+          onClick: () => onNavigate('/'),
+          icon: 'home'
+        }}
+      />
     );
   }
 

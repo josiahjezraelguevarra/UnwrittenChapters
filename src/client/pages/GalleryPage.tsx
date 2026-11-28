@@ -7,8 +7,6 @@ import {
   type FormEvent
 } from 'react';
 import {
-  AlertTriangle,
-  RefreshCw,
   X
 } from 'lucide-react';
 import type {
@@ -21,6 +19,7 @@ import { CustomSelect } from '../components/CustomSelect';
 import { GalleryLockScreen } from '../components/GalleryLockScreen';
 import { GallerySurface, type MediaFilter } from '../components/GallerySurface';
 import { PhotoLightboxModal } from '../components/PhotoLightboxModal';
+import { StatusErrorPage } from '../components/StatusErrorPage';
 import { TurnstileWidget } from '../components/TurnstileWidget';
 import { REPORT_REASON_OPTIONS } from '../config/galleryOptions';
 import {
@@ -285,46 +284,34 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
   }
 
   if (error || !data) {
+    const isExpired = error?.code === 'EXPIRED';
+    const isBlocked = error?.code === 'BLOCKED';
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center bg-stone-50 px-4 text-center">
-        <AlertTriangle className="h-10 w-10 text-amber-500" />
-        <h1 className="mt-4 text-2xl font-bold text-slate-900">
-          {error?.code === 'EXPIRED'
+      <StatusErrorPage
+        code={isExpired ? '410' : isBlocked ? '403' : '404'}
+        variant={isExpired ? 'expired' : isBlocked ? 'blocked' : 'not-found'}
+        title={
+          isExpired
             ? 'Gallery Expired'
-            : error?.code === 'BLOCKED'
+            : isBlocked
               ? 'Gallery Unavailable'
-              : 'Gallery Not Found'}
-        </h1>
-        <p className="mt-2 max-w-md text-sm text-slate-600">
-          {error?.message || 'This gallery could not be loaded.'}
-        </p>
-        <p className="mt-2 max-w-md text-xs text-slate-500">
-          API exhausted or hosting issue? Contact{' '}
-          <a
-            href={buildSupportMailto(`Gallery /g/${slug}`)}
-            className="font-semibold text-slate-800 underline underline-offset-2"
-          >
-            {SUPPORT_EMAIL}
-          </a>
-        </p>
-        <div className="mt-6 flex gap-3">
-          <button
-            type="button"
-            onClick={loadGallery}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 text-sm font-medium text-slate-800 hover:bg-stone-100"
-          >
-            <RefreshCw className="h-4 w-4" />
-            <span>Retry</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onNavigate('/')}
-            className="inline-flex min-h-[44px] items-center rounded-xl bg-slate-900 px-4 text-sm font-medium text-white hover:bg-slate-800"
-          >
-            Create a Gallery
-          </button>
-        </div>
-      </main>
+              : 'Gallery Not Found'
+        }
+        message={error?.message || 'This gallery could not be loaded.'}
+        appName={config.appName}
+        supportContext={`Gallery /g/${slug}`}
+        onNavigateHome={() => onNavigate('/')}
+        secondaryAction={{
+          label: 'Retry',
+          onClick: loadGallery,
+          icon: 'retry'
+        }}
+        primaryAction={{
+          label: 'Create a Gallery',
+          onClick: () => onNavigate('/'),
+          icon: 'create'
+        }}
+      />
     );
   }
 

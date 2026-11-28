@@ -4,6 +4,7 @@ import { FEEDBACK_FORM_URL, REPORT_FORM_URL } from '../shared/contact';
 import type { AppPublicConfig } from '../shared/types';
 import { CookieConsentBanner } from './components/CookieConsentBanner';
 import { DonateModal } from './components/DonateModal';
+import { StatusErrorPage } from './components/StatusErrorPage';
 import { fetchAppConfig } from './lib/api';
 import {
   canUsePreferenceStorage,
@@ -152,9 +153,23 @@ export function App() {
   const isToolsRoute = pathname === '/tools' || pathname === '/tools/';
   const isPrivacyRoute = pathname === '/privacy' || pathname === '/privacy/';
   const isTermsRoute = pathname === '/terms' || pathname === '/terms/';
-  const isHomeRoute =
-    !manageMatch && !mediaViewMatch && !galleryMatch && !isToolsRoute && !isPrivacyRoute && !isTermsRoute;
-  const isHomeDark = (isHomeRoute || isPrivacyRoute || isTermsRoute) && homeTheme === 'dark';
+  const isExactHome = pathname === '/' || pathname === '';
+  const isUnknownRoute =
+    !isExactHome &&
+    !manageMatch &&
+    !mediaViewMatch &&
+    !galleryMatch &&
+    !isToolsRoute &&
+    !isPrivacyRoute &&
+    !isTermsRoute;
+  const isHomeRoute = isExactHome;
+  const isHomeDark =
+    (isHomeRoute || isPrivacyRoute || isTermsRoute || isUnknownRoute) && homeTheme === 'dark';
+
+  useEffect(() => {
+    if (!isUnknownRoute) return;
+    document.title = `404 Page Not Found — ${config.appName}`;
+  }, [isUnknownRoute, config.appName]);
 
   return (
     <>
@@ -191,6 +206,26 @@ export function App() {
           dark={homeTheme === 'dark'}
           onNavigate={navigate}
           onOpenCookieSettings={() => setCookieBannerOpen(true)}
+        />
+      ) : isUnknownRoute ? (
+        <StatusErrorPage
+          code="404"
+          variant="not-found"
+          title="Page Not Found"
+          message={`We couldn't find "${pathname}". The link may be mistyped or the page no longer exists.`}
+          appName={config.appName}
+          dark={homeTheme === 'dark'}
+          onNavigateHome={() => navigate('/')}
+          primaryAction={{
+            label: 'Back to Home',
+            onClick: () => navigate('/'),
+            icon: 'home'
+          }}
+          secondaryAction={{
+            label: 'Photo Tools',
+            onClick: () => navigate('/tools'),
+            icon: 'tools'
+          }}
         />
       ) : (
         <HomePage

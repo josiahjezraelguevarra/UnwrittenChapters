@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertTriangle,
   ArrowLeft,
   Check,
   ChevronLeft,
@@ -11,7 +10,6 @@ import {
   Image as ImageIcon,
   Link2,
   Play,
-  RefreshCw,
   Video as VideoIcon,
   ZoomIn,
   ZoomOut
@@ -23,6 +21,7 @@ import {
 } from '../../shared/customization';
 import type { AppPublicConfig, GalleryViewResponse } from '../../shared/types';
 import { GalleryLockScreen } from '../components/GalleryLockScreen';
+import { StatusErrorPage } from '../components/StatusErrorPage';
 import {
   ApiError,
   fetchGalleryView,
@@ -229,33 +228,28 @@ export function MediaViewPage({ slug, fileId, config, onNavigate }: MediaViewPag
   }
 
   if (error || !data) {
+    const isExpired = error?.code === 'EXPIRED';
+    const isBlocked = error?.code === 'BLOCKED';
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center bg-stone-50 px-4 text-center">
-        <AlertTriangle className="h-10 w-10 text-amber-500" />
-        <h1 className="mt-4 text-2xl font-bold text-slate-900">
-          {error?.code === 'EXPIRED' ? 'Gallery Expired' : 'Unable to Load Media'}
-        </h1>
-        <p className="mt-2 max-w-md text-sm text-slate-600">
-          {error?.message || 'This media item could not be loaded.'}
-        </p>
-        <div className="mt-6 flex gap-3">
-          <button
-            type="button"
-            onClick={() => void loadGallery()}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 text-sm font-medium text-slate-800 hover:bg-stone-100"
-          >
-            <RefreshCw className="h-4 w-4" />
-            <span>Retry</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onNavigate(backGalleryPath)}
-            className="inline-flex min-h-[44px] items-center rounded-xl bg-slate-900 px-4 text-sm font-medium text-white hover:bg-slate-800"
-          >
-            Back to Gallery
-          </button>
-        </div>
-      </main>
+      <StatusErrorPage
+        code={isExpired ? '410' : isBlocked ? '403' : '404'}
+        variant={isExpired ? 'expired' : isBlocked ? 'blocked' : 'not-found'}
+        title={isExpired ? 'Gallery Expired' : 'Unable to Load Media'}
+        message={error?.message || 'This media item could not be loaded.'}
+        appName={config.appName}
+        supportContext={`Media /g/${slug}/view/${fileId}`}
+        onNavigateHome={() => onNavigate('/')}
+        secondaryAction={{
+          label: 'Retry',
+          onClick: () => void loadGallery(),
+          icon: 'retry'
+        }}
+        primaryAction={{
+          label: 'Back to Gallery',
+          onClick: () => onNavigate(backGalleryPath),
+          icon: 'back'
+        }}
+      />
     );
   }
 
@@ -268,27 +262,19 @@ export function MediaViewPage({ slug, fileId, config, onNavigate }: MediaViewPag
 
   if (!currentItem) {
     return (
-      <main
-        className="flex min-h-screen flex-col items-center justify-center px-4 text-center"
-        style={{ backgroundColor: tokens.bg, color: tokens.fg, fontFamily: fontMeta.bodyFamily }}
-      >
-        <ImageIcon className="h-10 w-10 opacity-40" />
-        <h1 className="mt-4 text-xl font-bold" style={{ fontFamily: fontMeta.headingFamily }}>
-          Item not found in this gallery
-        </h1>
-        <p className="mt-2 text-sm" style={{ color: tokens.mutedFg }}>
-          This photo or video may have been removed or moved during a Drive sync.
-        </p>
-        <button
-          type="button"
-          onClick={() => onNavigate(backGalleryPath)}
-          className="mt-6 inline-flex min-h-[44px] items-center gap-2 rounded-xl px-5 text-sm font-semibold"
-          style={{ backgroundColor: tokens.accent, color: tokens.accentFg }}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span>Back to Gallery</span>
-        </button>
-      </main>
+      <StatusErrorPage
+        code="404"
+        variant="not-found"
+        title="Item Not Found"
+        message="This photo or video may have been removed or moved during a Drive sync."
+        appName={config.appName}
+        onNavigateHome={() => onNavigate('/')}
+        primaryAction={{
+          label: 'Back to Gallery',
+          onClick: () => onNavigate(backGalleryPath),
+          icon: 'back'
+        }}
+      />
     );
   }
 
