@@ -28,6 +28,7 @@ import type {
   RecentGalleryEntry
 } from '../../shared/types';
 import { buildSupportMailto } from '../../shared/contact';
+import { ConfirmDeleteModal } from '../components/ConfirmDeleteModal';
 import { HeroGalleryMockup } from '../components/HeroGalleryMockup';
 import {
   DriveToGalleryIllustration,
@@ -169,6 +170,7 @@ export function HomePage({
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [recent, setRecent] = useState<RecentGalleryEntry[]>(() => getRecentGalleries());
+  const [pendingDeleteGallery, setPendingDeleteGallery] = useState<RecentGalleryEntry | null>(null);
 
   const scrollToSection = (id: string, focusInput = false) => {
     const el = document.getElementById(id);
@@ -555,10 +557,7 @@ export function HomePage({
                         <button
                           type="button"
                           aria-label={`Remove ${item.title} from recent list`}
-                          onClick={() => {
-                            removeRecentGallery(item.slug);
-                            setRecent(getRecentGalleries());
-                          }}
+                          onClick={() => setPendingDeleteGallery(item)}
                           className="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg text-slate-400 hover:bg-red-500/10 hover:text-red-500"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -854,6 +853,26 @@ export function HomePage({
 
         <VerseTickerBar dark={isDark} />
       </div>
+
+      <ConfirmDeleteModal
+        open={Boolean(pendingDeleteGallery)}
+        itemName={pendingDeleteGallery?.title || pendingDeleteGallery?.slug || 'this gallery'}
+        description={
+          pendingDeleteGallery
+            ? `This removes /g/${pendingDeleteGallery.slug} from your recent galleries list in this browser. Make sure you have your secret Manage link bookmarked if you need to edit it later.`
+            : ''
+        }
+        warningText="Warning: This action cannot be undone."
+        confirmLabel="Delete"
+        dark={isDark}
+        onCancel={() => setPendingDeleteGallery(null)}
+        onConfirm={() => {
+          if (!pendingDeleteGallery) return;
+          removeRecentGallery(pendingDeleteGallery.slug);
+          setRecent(getRecentGalleries());
+          setPendingDeleteGallery(null);
+        }}
+      />
     </>
   );
 }

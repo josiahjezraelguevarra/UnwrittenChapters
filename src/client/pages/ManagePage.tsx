@@ -42,6 +42,7 @@ import type {
 } from '../../shared/types';
 import { sanitizeHexColor, type GalleryPalettePreset } from '../../shared/customization';
 import { SUPPORT_EMAIL, buildSupportMailto } from '../../shared/contact';
+import { ConfirmDeleteModal } from '../components/ConfirmDeleteModal';
 import { CustomSelect, type CustomSelectOption } from '../components/CustomSelect';
 import {
   GalleryStyleControls,
@@ -142,7 +143,6 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const deleteDialogRef = useRef<HTMLDialogElement>(null);
 
   const [previewFilter, setPreviewFilter] = useState<MediaFilter>('all');
   const [previewFolderPath, setPreviewFolderPath] = useState<string>('__ALL__');
@@ -217,13 +217,6 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
     // Run once per slug mount using the initial URL hash if present
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
-
-  useEffect(() => {
-    const dialog = deleteDialogRef.current;
-    if (!dialog) return;
-    if (confirmDeleteOpen && !dialog.open) dialog.showModal();
-    else if (!confirmDeleteOpen && dialog.open) dialog.close();
-  }, [confirmDeleteOpen]);
 
   useEffect(() => {
     if (!previewFullscreen) return;
@@ -1556,37 +1549,17 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
         </section>
       </main>
 
-      <dialog
-        ref={deleteDialogRef}
-        onClose={() => setConfirmDeleteOpen(false)}
-        aria-labelledby="delete-dialog-title"
-        className="m-auto w-[min(92vw,26rem)] rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl"
-      >
-        <h2 id="delete-dialog-title" className="text-lg font-bold text-slate-900">
-          Delete this gallery?
-        </h2>
-        <p className="mt-2 text-sm text-slate-600">
-          This removes the gallery link and likes from {slug}. Your original files inside Google
-          Drive are never touched.
-        </p>
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => setConfirmDeleteOpen(false)}
-            className="min-h-[40px] rounded-xl border border-stone-300 px-4 text-sm font-medium"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={deleting}
-            onClick={handleDelete}
-            className="min-h-[40px] rounded-xl bg-red-600 px-4 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
-          >
-            {deleting ? 'Deleting...' : 'Delete Permanently'}
-          </button>
-        </div>
-      </dialog>
+      <ConfirmDeleteModal
+        open={confirmDeleteOpen}
+        itemName={title.trim() || data.gallery.title || slug}
+        description={`This permanently removes the gallery link and all likes from /g/${slug}. Your original files inside Google Drive are never touched.`}
+        warningText="Warning: This action cannot be undone."
+        confirmLabel="Delete Permanently"
+        busyLabel="Deleting..."
+        busy={deleting}
+        onCancel={() => setConfirmDeleteOpen(false)}
+        onConfirm={handleDelete}
+      />
 
       <QrShareModal
         open={qrOpen}
