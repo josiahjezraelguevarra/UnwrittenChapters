@@ -48,7 +48,12 @@ import {
   REPORT_FORM_URL,
   SUPPORT_EMAIL
 } from '../../shared/contact';
-import { DriveError, extractDriveFolderId, fetchDriveFolderTree } from '../drive';
+import {
+  DriveError,
+  extractDriveFolderId,
+  fetchMultiDriveFolderTrees,
+  MAX_DRIVE_SOURCES
+} from '../drive';
 import {
   isValidDriveId,
   isValidSlugParam,
@@ -57,6 +62,7 @@ import {
   sanitizeControlChars
 } from '../security';
 import {
+  checkEdgeRateLimit,
   checkRateLimit,
   getGalleryBySlug,
   invalidateGalleryCache,
@@ -68,9 +74,12 @@ export const galleriesRouter = new Hono<{ Bindings: Env }>();
 const PASSWORD_MIN_LENGTH = 6;
 const PASSWORD_MAX_LENGTH = 128;
 const ADMIN_COOKIE_TTL_SECONDS = 60 * 60 * 24 * 30;
+const AUTO_SYNC_STALE_MS = 6 * 60 * 60 * 1000;
+const AUTO_SYNC_LOCK_TTL_SECONDS = 180;
 
 const ALLOWED_CREATE_KEYS = new Set([
   'driveUrl',
+  'driveUrls',
   'title',
   'description',
   'brandName',
@@ -92,6 +101,7 @@ const ALLOWED_CREATE_KEYS = new Set([
   'expiresInDays',
   'allowDownload',
   'allowLikes',
+  'autoSync',
   'turnstileToken'
 ]);
 
@@ -100,6 +110,7 @@ const ALLOWED_LIKE_KEYS = new Set(['fileId', 'visitorId']);
 const ALLOWED_SESSION_KEYS = new Set(['token']);
 const ALLOWED_REPORT_KEYS = new Set(['reason', 'details', 'turnstileToken']);
 const ALLOWED_PATCH_KEYS = new Set([
+  'driveUrls',
   'title',
   'description',
   'brandName',
@@ -119,6 +130,7 @@ const ALLOWED_PATCH_KEYS = new Set([
   'coverFileId',
   'allowDownload',
   'allowLikes',
+  'autoSync',
   'password',
   'clearPassword',
   'expiresInDays'
@@ -204,7 +216,15 @@ function sanitizeHttpUrl(raw: unknown): string {
 }
 
 function validateLayout(raw: unknown): GalleryLayout {
-  if (raw === 'grid' || raw === 'justified' || raw === 'masonry') return raw;
+  if (
+    raw === 'grid' ||
+    raw === 'justified' ||
+    raw === 'masonry' ||
+    raw === 'large' ||
+    raw === 'editorial'
+  ) {
+    return raw;
+  }
   return 'masonry';
 }
 
@@ -218,6 +238,69 @@ function computeExpiryTimestamp(days: unknown): number | null {
   if (!Number.isFinite(n) || n <= 0) return null;
   const clamped = Math.min(n, 365);
   return Date.now() + clamped * 24 * 60 * 60 * 1000;
+}
+
+function parseStoredDriveSources(row: GalleryRow): string[] {
+  try {
+    const parsed = JSON.parse(row.drive_sources_json || '[]') as unknown;
+    if (Array.isArray(parsed)) {
+      const valid = parsed.filter((v): v is string => typeof v === 'string' && isValidDriveId(v));
+      if (valid.length > 0) return Array.from(new Set(valid)).slice(0, MAX_DRIVE_SOURCES);
+    }
+  } catch {
+    // Fall back to primary drive_folder_id
+  }
+  return row.drive_folder_id ? [row.drive_folder_id] : [];
+}
+
+function resolveDriveFolderIdsFromInput(
+  rawList: unknown,
+  rawSingle?: unknown
+): { ok: true; folderIds: string[] } | { ok: false; error: string; code: string } {
+  const candidates: string[] = [];
+  if (Array.isArray(rawList)) {
+    for (const entry of rawList) {
+      if (typeof entry === 'string' && entry.trim()) candidates.push(entry.trim());
+    }
+  }
+  if (typeof rawSingle === 'string' && rawSingle.trim()) {
+    candidates.unshift(rawSingle.trim());
+  }
+
+  if (candidates.length === 0) {
+    return {
+      ok: false,
+      error: 'Invalid Google Drive folder link. Paste a URL like https://drive.google.com/drive/folders/...',
+      code: 'INVALID_DRIVE_URL'
+    };
+  }
+
+  const folderIds: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of candidates) {
+    const id = extractDriveFolderId(raw);
+    if (!id) {
+      return {
+        ok: false,
+        error: 'Invalid Google Drive folder link. Paste URLs like https://drive.google.com/drive/folders/...',
+        code: 'INVALID_DRIVE_URL'
+      };
+    }
+    if (!seen.has(id)) {
+      seen.add(id);
+      folderIds.push(id);
+    }
+  }
+
+  if (folderIds.length > MAX_DRIVE_SOURCES) {
+    return {
+      ok: false,
+      error: `You can combine up to ${MAX_DRIVE_SOURCES} Google Drive links per album.`,
+      code: 'TOO_MANY_DRIVE_SOURCES'
+    };
+  }
+
+  return { ok: true, folderIds };
 }
 
 function toPublicConfig(
@@ -247,9 +330,11 @@ function toPublicConfig(
     brandUrl: row.brand_url,
     allowDownload: row.allow_download === 1,
     allowLikes: row.allow_likes === 1,
+    autoSync: row.auto_sync !== 0,
     hasPassword: Boolean(row.password_hash),
     expiresAt: row.expires_at,
     itemCount: row.item_count,
+    sourceCount: parseStoredDriveSources(row).length,
     viewCount: row.view_count,
     syncedAt: row.synced_at,
     createdAt: row.created_at
@@ -259,6 +344,54 @@ function toPublicConfig(
 function getClientIp(c: { req: { header: (name: string) => string | undefined } }): string {
   // Prefer Cloudflare's verified edge IP header; avoid trusting spoofable X-Forwarded-For
   return c.req.header('cf-connecting-ip')?.trim() || 'unknown';
+}
+
+async function performGalleryDriveSync(env: Env, row: GalleryRow) {
+  const sourceIds = parseStoredDriveSources(row);
+  const sync = await fetchMultiDriveFolderTrees(
+    sourceIds,
+    env.GOOGLE_DRIVE_API_KEY,
+    fetch,
+    env.GOOGLE_DRIVE_API_KEY_BACKUP
+  );
+  const prevItems = JSON.parse(row.items_json) as StoredMediaItem[];
+  const prevFolders = JSON.parse(row.folders_json) as StoredGalleryFolder[];
+  const { storedItems, storedFolders } = assignOpaqueIds(
+    sync.items,
+    sync.folders,
+    prevItems,
+    prevFolders
+  );
+
+  const now = Date.now();
+  const coverStillExists = sync.items.some((i) => i.id === row.cover_file_id);
+  const coverFileId = coverStillExists ? row.cover_file_id : sync.items[0]?.id ?? null;
+
+  await env.DB.prepare(
+    `UPDATE galleries SET
+      items_json = ?1, folders_json = ?2, item_count = ?3, cover_file_id = ?4, synced_at = ?5
+     WHERE id = ?6`
+  )
+    .bind(
+      JSON.stringify(storedItems),
+      JSON.stringify(storedFolders),
+      sync.items.length,
+      coverFileId,
+      now,
+      row.id
+    )
+    .run();
+
+  const updated = await getGalleryBySlug(env.DB, row.slug);
+  if (updated) await saveManifestCache(env.CACHE, updated);
+
+  return {
+    itemCount: sync.items.length,
+    syncedAt: now,
+    truncated: sync.truncated,
+    storedItems,
+    storedFolders
+  };
 }
 
 function runWaitUntil(
@@ -337,7 +470,10 @@ galleriesRouter.post('/galleries', async (c) => {
   if (!parsed.ok) return parsed.response;
   const body = parsed.data;
 
-  if (typeof body.driveUrl !== 'string') {
+  const hasDriveInput =
+    (typeof body.driveUrl === 'string' && body.driveUrl.trim().length > 0) ||
+    (Array.isArray(body.driveUrls) && body.driveUrls.length > 0);
+  if (!hasDriveInput) {
     return c.json({ error: 'Please provide a Google Drive folder link.', code: 'INVALID_INPUT' }, 400);
   }
 
@@ -362,16 +498,12 @@ galleriesRouter.post('/galleries', async (c) => {
     );
   }
 
-  const folderId = extractDriveFolderId(body.driveUrl);
-  if (!folderId) {
-    return c.json(
-      {
-        error: 'Invalid Google Drive folder link. Paste a URL like https://drive.google.com/drive/folders/...',
-        code: 'INVALID_DRIVE_URL'
-      },
-      400
-    );
+  const resolvedSources = resolveDriveFolderIdsFromInput(body.driveUrls, body.driveUrl);
+  if (!resolvedSources.ok) {
+    return c.json({ error: resolvedSources.error, code: resolvedSources.code }, 400);
   }
+  const folderIds = resolvedSources.folderIds;
+  const folderId = folderIds[0];
 
   const rawPassword = typeof body.password === 'string' ? body.password.trim() : '';
   if (rawPassword && (rawPassword.length < PASSWORD_MIN_LENGTH || rawPassword.length > PASSWORD_MAX_LENGTH)) {
@@ -415,7 +547,12 @@ galleriesRouter.post('/galleries', async (c) => {
     }
   }
 
-  const sync = await fetchDriveFolderTree(folderId, c.env.GOOGLE_DRIVE_API_KEY);
+  const sync = await fetchMultiDriveFolderTrees(
+    folderIds,
+    c.env.GOOGLE_DRIVE_API_KEY,
+    fetch,
+    c.env.GOOGLE_DRIVE_API_KEY_BACKUP
+  );
   if (sync.items.length === 0) {
     return c.json(
       {
@@ -454,6 +591,7 @@ galleriesRouter.post('/galleries', async (c) => {
   const cardRadius = validateCardRadius(body.cardRadius);
   const allowDownload = body.allowDownload === false ? 0 : 1;
   const allowLikes = body.allowLikes === false ? 0 : 1;
+  const autoSync = body.autoSync === false ? 0 : 1;
   const expiresAt = computeExpiryTimestamp(body.expiresInDays);
   const now = Date.now();
   const coverFileId = sync.items[0]?.id ?? null;
@@ -463,6 +601,7 @@ galleriesRouter.post('/galleries', async (c) => {
     id,
     slug,
     drive_folder_id: folderId,
+    drive_sources_json: JSON.stringify(folderIds),
     title,
     description,
     cover_file_id: coverFileId,
@@ -484,6 +623,7 @@ galleriesRouter.post('/galleries', async (c) => {
     admin_token_hash: adminTokenHash,
     allow_download: allowDownload,
     allow_likes: allowLikes,
+    auto_sync: autoSync,
     expires_at: expiresAt,
     status: 'active',
     items_json: JSON.stringify(storedItems),
@@ -496,17 +636,18 @@ galleriesRouter.post('/galleries', async (c) => {
 
   await c.env.DB.prepare(
     `INSERT INTO galleries (
-      id, slug, drive_folder_id, title, description, cover_file_id, layout, theme,
+      id, slug, drive_folder_id, drive_sources_json, title, description, cover_file_id, layout, theme,
       font_preset, accent_color, background_color, surface_color, text_color,
       hero_style, card_style, caption_mode, grid_gap, card_radius,
       brand_name, brand_url, password_hash, admin_token_hash, allow_download, allow_likes,
-      expires_at, status, items_json, folders_json, item_count, view_count, synced_at, created_at
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32)`
+      auto_sync, expires_at, status, items_json, folders_json, item_count, view_count, synced_at, created_at
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34)`
   )
     .bind(
       row.id,
       row.slug,
       row.drive_folder_id,
+      row.drive_sources_json,
       row.title,
       row.description,
       row.cover_file_id,
@@ -528,6 +669,7 @@ galleriesRouter.post('/galleries', async (c) => {
       row.admin_token_hash,
       row.allow_download,
       row.allow_likes,
+      row.auto_sync,
       row.expires_at,
       row.status,
       row.items_json,
@@ -566,7 +708,7 @@ galleriesRouter.get('/galleries/:slug', async (c) => {
   }
 
   const ip = getClientIp(c);
-  const viewAllowed = await checkRateLimit(c.env.CACHE, `rl:view:${ip}`, 180, 300);
+  const viewAllowed = checkEdgeRateLimit(`rl:view:${ip}`, 180, 300);
   if (!viewAllowed) {
     return c.json({ error: 'Too many requests. Please slow down.', code: 'RATE_LIMITED' }, 429);
   }
@@ -645,6 +787,21 @@ galleriesRouter.get('/galleries/:slug', async (c) => {
       .run()
   );
 
+  if (row.auto_sync !== 0 && Date.now() - row.synced_at >= AUTO_SYNC_STALE_MS) {
+    const lockKey = `autosync:${row.slug}`;
+    runWaitUntil(
+      c,
+      (async () => {
+        const locked = await c.env.CACHE.get(lockKey);
+        if (locked) return;
+        await c.env.CACHE.put(lockKey, '1', { expirationTtl: AUTO_SYNC_LOCK_TTL_SECONDS });
+        await performGalleryDriveSync(c.env, row);
+      })().catch((err) => {
+        console.warn('Background auto-sync failed:', err instanceof Error ? err.message : 'Unknown error');
+      })
+    );
+  }
+
   return c.json({
     locked: false,
     gallery: publicConfig,
@@ -705,7 +862,7 @@ galleriesRouter.post('/galleries/:slug/likes', async (c) => {
   }
 
   const ip = getClientIp(c);
-  const allowed = await checkRateLimit(c.env.CACHE, `rl:like:${slug}:${ip}`, 120, 60);
+  const allowed = checkEdgeRateLimit(`rl:like:${slug}:${ip}`, 120, 60);
   if (!allowed) {
     return c.json({ error: 'Too many favorite actions. Please slow down.', code: 'RATE_LIMITED' }, 429);
   }
@@ -881,6 +1038,9 @@ galleriesRouter.get('/galleries/:slug/manage', async (c) => {
   return c.json({
     gallery: toPublicConfig(row, storedItems),
     driveFolderId: '',
+    driveSources: parseStoredDriveSources(row).map(
+      (id) => `https://drive.google.com/drive/folders/${id}`
+    ),
     items: toPublicItems(storedItems),
     folders: toPublicFolders(storedFolders),
     likeCounts
@@ -962,6 +1122,8 @@ galleriesRouter.patch('/galleries/:slug/manage', async (c) => {
     typeof body.allowDownload === 'boolean' ? (body.allowDownload ? 1 : 0) : row.allow_download;
   const allowLikes =
     typeof body.allowLikes === 'boolean' ? (body.allowLikes ? 1 : 0) : row.allow_likes;
+  const autoSync =
+    typeof body.autoSync === 'boolean' ? (body.autoSync ? 1 : 0) : row.auto_sync;
 
   let coverFileId = row.cover_file_id;
   if (typeof body.coverFileId === 'string') {
@@ -988,6 +1150,21 @@ galleriesRouter.patch('/galleries/:slug/manage', async (c) => {
     passwordHash = await hashPassword(newPw);
   }
 
+  let nextFolderIds = parseStoredDriveSources(row);
+  let sourcesChanged = false;
+  if (body.driveUrls !== undefined) {
+    const resolved = resolveDriveFolderIdsFromInput(body.driveUrls);
+    if (!resolved.ok) {
+      return c.json({ error: resolved.error, code: resolved.code }, 400);
+    }
+    const prevKey = nextFolderIds.join(',');
+    const nextKey = resolved.folderIds.join(',');
+    if (prevKey !== nextKey) {
+      nextFolderIds = resolved.folderIds;
+      sourcesChanged = true;
+    }
+  }
+
   let expiresAt = row.expires_at;
   if (body.expiresInDays !== undefined) {
     expiresAt = computeExpiryTimestamp(body.expiresInDays);
@@ -1000,8 +1177,9 @@ galleriesRouter.patch('/galleries/:slug/manage', async (c) => {
       background_color = ?9, surface_color = ?10, text_color = ?11,
       hero_style = ?12, card_style = ?13, caption_mode = ?14,
       grid_gap = ?15, card_radius = ?16, cover_file_id = ?17, allow_download = ?18,
-      allow_likes = ?19, password_hash = ?20, expires_at = ?21
-     WHERE id = ?22`
+      allow_likes = ?19, auto_sync = ?20, password_hash = ?21, expires_at = ?22,
+      drive_folder_id = ?23, drive_sources_json = ?24
+     WHERE id = ?25`
   )
     .bind(
       title,
@@ -1023,23 +1201,39 @@ galleriesRouter.patch('/galleries/:slug/manage', async (c) => {
       coverFileId,
       allowDownload,
       allowLikes,
+      autoSync,
       passwordHash,
       expiresAt,
+      nextFolderIds[0] || row.drive_folder_id,
+      JSON.stringify(nextFolderIds),
       row.id
     )
     .run();
 
-  await invalidateGalleryCache(c.env.CACHE, row.slug);
-  const updated = await getGalleryBySlug(c.env.DB, row.slug);
-  if (updated) await saveManifestCache(c.env.CACHE, updated);
+  let updated = await getGalleryBySlug(c.env.DB, row.slug);
+  let syncResult: Awaited<ReturnType<typeof performGalleryDriveSync>> | null = null;
+  if (updated && sourcesChanged) {
+    syncResult = await performGalleryDriveSync(c.env, updated);
+    updated = await getGalleryBySlug(c.env.DB, row.slug);
+  } else if (updated) {
+    await saveManifestCache(c.env.CACHE, updated);
+  }
   if (passwordHash) {
     await setUnlockCookieForSlug(c, row.slug, passwordHash);
   }
 
+  const finalItems = syncResult ? syncResult.storedItems : storedItems;
   return c.json({
     gallery: updated
-      ? toPublicConfig(updated, storedItems)
-      : toPublicConfig(row, storedItems)
+      ? toPublicConfig(updated, finalItems)
+      : toPublicConfig(row, finalItems),
+    ...(syncResult
+      ? {
+          items: toPublicItems(syncResult.storedItems),
+          folders: toPublicFolders(syncResult.storedFolders)
+        }
+      : {}),
+    driveSources: nextFolderIds.map((id) => `https://drive.google.com/drive/folders/${id}`)
   });
 });
 
@@ -1063,45 +1257,14 @@ galleriesRouter.post('/galleries/:slug/sync', async (c) => {
     );
   }
 
-  const sync = await fetchDriveFolderTree(row.drive_folder_id, c.env.GOOGLE_DRIVE_API_KEY);
-  const prevItems = JSON.parse(row.items_json) as StoredMediaItem[];
-  const prevFolders = JSON.parse(row.folders_json) as StoredGalleryFolder[];
-  const { storedItems, storedFolders } = assignOpaqueIds(
-    sync.items,
-    sync.folders,
-    prevItems,
-    prevFolders
-  );
-
-  const now = Date.now();
-  const coverStillExists = sync.items.some((i) => i.id === row.cover_file_id);
-  const coverFileId = coverStillExists ? row.cover_file_id : sync.items[0]?.id ?? null;
-
-  await c.env.DB.prepare(
-    `UPDATE galleries SET
-      items_json = ?1, folders_json = ?2, item_count = ?3, cover_file_id = ?4, synced_at = ?5
-     WHERE id = ?6`
-  )
-    .bind(
-      JSON.stringify(storedItems),
-      JSON.stringify(storedFolders),
-      sync.items.length,
-      coverFileId,
-      now,
-      row.id
-    )
-    .run();
-
-  await invalidateGalleryCache(c.env.CACHE, row.slug);
-  const updated = await getGalleryBySlug(c.env.DB, row.slug);
-  if (updated) await saveManifestCache(c.env.CACHE, updated);
+  const result = await performGalleryDriveSync(c.env, row);
 
   return c.json({
-    itemCount: sync.items.length,
-    syncedAt: now,
-    truncated: sync.truncated,
-    items: toPublicItems(storedItems),
-    folders: toPublicFolders(storedFolders)
+    itemCount: result.itemCount,
+    syncedAt: result.syncedAt,
+    truncated: result.truncated,
+    items: toPublicItems(result.storedItems),
+    folders: toPublicFolders(result.storedFolders)
   });
 });
 

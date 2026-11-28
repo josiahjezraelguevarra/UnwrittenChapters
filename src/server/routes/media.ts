@@ -12,7 +12,7 @@ import {
   isValidRangeHeader,
   isValidSlugParam
 } from '../security';
-import { checkRateLimit, getMediaManifest } from '../storage';
+import { checkEdgeRateLimit, getMediaManifest } from '../storage';
 import type { Env } from '../types';
 import { getSigningSecret, unlockCookieName } from './galleries';
 
@@ -42,7 +42,7 @@ mediaRouter.get('/media/:slug/:fileId', async (c) => {
   }
 
   const ip = c.req.header('cf-connecting-ip')?.trim() || 'unknown';
-  const mediaAllowed = await checkRateLimit(c.env.CACHE, `rl:media:${ip}`, 600, 60);
+  const mediaAllowed = checkEdgeRateLimit(`rl:media:${ip}`, 600, 60);
   if (!mediaAllowed) {
     return c.json({ error: 'Too many media requests. Please slow down.' }, 429);
   }
@@ -106,7 +106,9 @@ mediaRouter.get('/media/:slug/:fileId', async (c) => {
   if (variant === 'thumb') {
     const thumbLink = await fetchDriveThumbnailUrl(
       fileMeta.driveFileId,
-      c.env.GOOGLE_DRIVE_API_KEY
+      c.env.GOOGLE_DRIVE_API_KEY,
+      fetch,
+      c.env.GOOGLE_DRIVE_API_KEY_BACKUP
     );
     if (thumbLink) {
       const sizedUrl = buildThumbnailSizedUrl(
@@ -154,14 +156,24 @@ mediaRouter.get('/media/:slug/:fileId', async (c) => {
     upstreamHeaders.set('Range', range.trim());
   }
 
-  const streamUrl = buildDriveMediaStreamUrl(
-    fileMeta.driveFileId,
-    c.env.GOOGLE_DRIVE_API_KEY
+  let upstream = await fetch(
+    buildDriveMediaStreamUrl(fileMeta.driveFileId, c.env.GOOGLE_DRIVE_API_KEY),
+    {
+      headers: upstreamHeaders,
+      signal: AbortSignal.timeout(25_000)
+    }
   );
-  const upstream = await fetch(streamUrl, {
-    headers: upstreamHeaders,
-    signal: AbortSignal.timeout(25_000)
-  });
+  const backupKey = c.env.GOOGLE_DRIVE_API_KEY_BACKUP?.trim();
+  if (
+    (upstream.status === 429 || upstream.status === 403) &&
+    backupKey &&
+    backupKey !== c.env.GOOGLE_DRIVE_API_KEY
+  ) {
+    upstream = await fetch(buildDriveMediaStreamUrl(fileMeta.driveFileId, backupKey), {
+      headers: upstreamHeaders,
+      signal: AbortSignal.timeout(25_000)
+    });
+  }
 
   if (!upstream.ok && upstream.status !== 206) {
     return c.json(

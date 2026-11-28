@@ -11,6 +11,34 @@
     background: rgba(15, 23, 42, 0.72);
     backdrop-filter: blur(6px);
   }
+
+  a[href],
+  a[href]:hover,
+  a[href]:active,
+  button:not(:disabled),
+  button:not(:disabled):hover,
+  button:not(:disabled):active,
+  [role='button']:not([aria-disabled='true']),
+  [role='switch']:not([aria-disabled='true']),
+  [role='tab']:not([aria-disabled='true']),
+  [role='radio']:not([aria-disabled='true']),
+  summary,
+  select:not(:disabled),
+  input[type='checkbox']:not(:disabled),
+  input[type='radio']:not(:disabled),
+  input[type='range']:not(:disabled),
+  input[type='file']:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  button:disabled:hover,
+  [aria-disabled='true'],
+  select:disabled,
+  input:disabled,
+  textarea:disabled {
+    cursor: not-allowed;
+  }
 }
 
 @layer components {
@@ -204,22 +232,170 @@
   animation-play-state: paused;
 }
 
+@keyframes uc-hero-zoom {
+  from {
+    transform: scale(1.08);
+  }
+  to {
+    transform: scale(1.01);
+  }
+}
+
+.uc-hero-zoom {
+  animation: uc-hero-zoom 1.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes uc-slide-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.uc-slide-reveal {
+  animation: uc-slide-reveal 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.uc-gallery-card {
+  opacity: 0;
+  transform: translateY(28px) scale(0.985);
+  transition:
+    opacity 560ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 640ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.uc-gallery-card.uc-card-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+@keyframes uc-hero-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(5px);
+  }
+}
+
+.uc-hero-bounce {
+  animation: uc-hero-bounce 2s ease-in-out infinite;
+}
+
+@keyframes uc-float-slow {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-6deg);
+  }
+  50% {
+    transform: translateY(-7px) rotate(-4deg);
+  }
+}
+
+@keyframes uc-float-delayed {
+  0%,
+  100% {
+    transform: translateY(0) rotate(6deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(8deg);
+  }
+}
+
+@keyframes uc-pulse-ring {
+  0%,
+  100% {
+    transform: scale(0.96);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.85;
+  }
+}
+
+.uc-float-slow {
+  animation: uc-float-slow 5.2s ease-in-out infinite;
+}
+
+.uc-float-delayed {
+  animation: uc-float-delayed 5.8s ease-in-out 0.6s infinite;
+}
+
+.uc-pulse-ring {
+  animation: uc-pulse-ring 3.4s ease-in-out infinite;
+}
+
+.uc-stagger-1 {
+  animation: uc-slide-reveal 520ms cubic-bezier(0.16, 1, 0.3, 1) 40ms both;
+}
+
+.uc-stagger-2 {
+  animation: uc-slide-reveal 560ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
+}
+
+.uc-stagger-3 {
+  animation: uc-slide-reveal 600ms cubic-bezier(0.16, 1, 0.3, 1) 200ms both;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 9999;
+}
+
+html.uc-theme-transition *,
+html.uc-theme-transition *::before,
+html.uc-theme-transition *::after {
+  transition: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .uc-cursor-blink,
   .uc-fade-in,
-  .uc-dropdown-menu {
+  .uc-dropdown-menu,
+  .uc-hero-zoom,
+  .uc-slide-reveal,
+  .uc-hero-bounce,
+  .uc-float-slow,
+  .uc-float-delayed,
+  .uc-pulse-ring,
+  .uc-stagger-1,
+  .uc-stagger-2,
+  .uc-stagger-3 {
     animation: none;
+  }
+
+  .uc-gallery-card {
+    opacity: 1;
+    transform: none;
+    transition: none;
   }
 }
 
 .masonry-columns {
-  column-count: 1;
-  column-gap: var(--gallery-gap, 1rem);
+  column-count: 2;
+  column-gap: clamp(0.35rem, var(--gallery-gap, 0.75rem), 0.75rem);
 }
 
 @media (min-width: 640px) {
   .masonry-columns {
     column-count: 2;
+    column-gap: var(--gallery-gap, 1rem);
   }
 }
 
@@ -253,14 +429,22 @@
 }
 
 .justified-item {
-  height: 220px;
+  height: 155px;
   flex-grow: 1;
-  min-width: 180px;
+  min-width: 120px;
   max-width: 100%;
+}
+
+@media (min-width: 640px) {
+  .justified-item {
+    height: 220px;
+    min-width: 170px;
+  }
 }
 
 @media (min-width: 768px) {
   .justified-item {
     height: 260px;
+    min-width: 180px;
   }
 }

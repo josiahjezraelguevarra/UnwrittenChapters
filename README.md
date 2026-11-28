@@ -1,124 +1,169 @@
-# UnwrittenChapters — Free Google Drive Client Photo Galleries
+<div align="center">
+  <img src="public/logo.png" alt="UnwrittenChapters logo" width="72" height="72" />
 
-Turn any publicly shared Google Drive folder (`Anyone with the link → Viewer`) into a fast, client-ready photo and HD video gallery hosted for **\$0/month** on Cloudflare Workers, D1, and KV.
+  <h1>UnwrittenChapters</h1>
 
-Files never leave your Google Drive—UnwrittenChapters indexes metadata and proxies media cleanly while adding client favorites, password locks, custom visual themes, and browser-side batch ZIP downloads.
+  <p>
+    <strong>Turn any public Google Drive folder into a fast, client-ready photo &amp; HD video gallery — hosted for $0/month.</strong>
+  </p>
+
+  <p>
+    <a href="https://unwrittenchapters.website">
+      <img src="https://img.shields.io/badge/Live-unwrittenchapters.website-141311?style=for-the-badge" alt="Live Site" />
+    </a>
+    <img src="https://img.shields.io/badge/Cloudflare-Workers%20%2B%20D1%20%2B%20KV-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare Workers" />
+    <img src="https://img.shields.io/badge/React-19-149ECA?style=for-the-badge&logo=react&logoColor=white" alt="React 19" />
+    <img src="https://img.shields.io/badge/Hono-4-E36002?style=for-the-badge&logo=hono&logoColor=white" alt="Hono" />
+    <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
+  </p>
+
+  <p>
+    <a href="#-features">Features</a> &bull;
+    <a href="#%EF%B8%8F-architecture">Architecture</a> &bull;
+    <a href="#-local-development">Quick Start</a> &bull;
+    <a href="#-production-deployment">Deployment</a> &bull;
+    <a href="#-security-model">Security</a> &bull;
+    <a href="#-releases--support">Releases</a>
+  </p>
+
+  <br />
+
+  <img src="public/og-cover.png" alt="UnwrittenChapters — Share Google Drive folders as client photo galleries" width="840" />
+</div>
 
 ---
 
-## Features
+## Overview
 
-- **Zero Sign-Up Workflow:** Paste any public Google Drive folder URL to generate a client **Share Link** (`/g/<slug>`) and a private **Manage Link** (`/g/<slug>/manage#<token>`).
-- **30-Day Manage Sessions & Link Rotation:** Manage links exchange seamlessly into an `HttpOnly`, HMAC-signed 30-day session cookie (`uc_admin_<slug>`), with one-click token rotation in **Manage → Access**.
-- **Whole-Gallery Customization & Live Preview:** Choose Masonry, Justified, or Square Grid layouts, typography presets (`sans`, `serif`, `fineart`, `mono`), color tokens (`light`, `dark`, `warm`, `sage`, `midnight` or custom hex), hero styles (`banner`, `minimal`, `split`), card styles (`clean`, `framed`, `mat`), captions, cover image, and custom studio branding with desktop/mobile live preview.
-- **Nested Folders & HD Media:** Walks Drive subfolders up to 3 levels deep (up to 40 subfolders and 2,000 items), supports PhotoSwipe zoomable lightbox viewing, and streams HD video via HTTP `Range` requests.
-- **Client Favorites & Batch ZIP Export:** Visitors can heart favorite shots, copy filenames, or export client selections as `.txt` / `.csv` (for Lightroom / Capture One filtering), plus stream full-resolution batch ZIPs in-browser via `client-zip`.
-- **Security & Abuse Guardrails:** PBKDF2-SHA256 gallery passwords, HMAC `HttpOnly` unlock cookies, configurable expiry dates, opaque Drive IDs, Cloudflare Turnstile verification, per-IP rate limiting, strict `(slug, fileId)` proxy validation, and configurable Google Forms links for **Feedback** and **Report Gallery**.
-- **SEO & Privacy Ready:** Built-in Open Graph (`public/og-cover.png`), Twitter Card metadata, `WebApplication` + `FAQPage` JSON-LD schema, `robots.txt` (`Disallow: /g/`), `/sitemap.xml`, and `noindex, nofollow` enforcement on private gallery and manage routes.
+**UnwrittenChapters** wraps existing Google Drive folders (`Anyone with the link → Viewer`) in a clean, client-ready gallery experience without re-uploading gigabytes or paying monthly storage subscriptions. Your original media never leaves Google Drive—Cloudflare Workers handles indexing, opaque media proxying, password gates, and studio customization.
 
 ---
 
-## Repository Structure
+## ✨ Features
+
+| Area | What It Does |
+| :--- | :--- |
+| **Zero Sign-Up Workflow** | Paste a public Google Drive folder link to generate a client **Share Link** (`/g/<slug>`) and private **Manage Link** (`/g/<slug>/manage#<token>`). |
+| **Whole-Gallery Theming** | Customize Masonry, Justified, or Square grids, presets (`light`, `dark`, `warm`, `sage`, `midnight`, or custom hex tokens), typography (`sans`, `serif`, `fineart`, `mono`), hero layout, photo frame style, captions, and studio branding with live desktop/mobile preview. |
+| **HD Photos & Video** | Crawls nested folders up to **3 levels deep** (up to **40 subfolders** / **2,000 items**), renders full-resolution PhotoSwipe lightboxes, and streams HD video via HTTP `Range` requests. |
+| **Client Favorites & Export** | Clients heart favorite photos/videos; creators review picks and copy or export selected filenames directly as `.txt` or `.csv` for **Lightroom** / **Capture One** filtering. |
+| **Client-Side Batch ZIP** | Streams full-resolution downloads straight into a ZIP archive in the visitor's browser via `client-zip` (zero server ZIP memory overhead). |
+| **SEO & Client Privacy** | Homepage ships with Open Graph, Twitter Card, `WebApplication` + `FAQPage` JSON-LD, `robots.txt`, and `sitemap.xml`, while `/g/*` and `/api/*` enforce `noindex, nofollow`. |
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+flowchart LR
+    U["Creator or Client Browser"] -->|HTTPS| W["Cloudflare Worker (Hono API + SPA Assets)"]
+    W -->|Metadata, Likes, Reports, Rate Limits| D1[("Cloudflare D1 (SQLite)")]
+    W -->|Folder Index Cache| KV[("Cloudflare KV")]
+    W -->|Read-Only Metadata & Opaque Proxy Stream| GD["Google Drive API v3"]
+```
+
+<details>
+<summary><strong>Repository Structure</strong></summary>
 
 ```text
-├── migrations/                  # Cloudflare D1 SQL schema migrations (0001..0003)
-├── public/                      # Static assets (logo, og-cover.png, icons, qr, robots.txt, manifest)
+├── migrations/                  # Cloudflare D1 SQL migrations (0001_init .. 0003_gallery_theming)
+├── public/                      # Static assets (logo, og-cover.png, icons, qr, robots.txt, sitemap.xml)
 ├── src/
-│   ├── client/                  # React 19 + Tailwind CSS v4 frontend
+│   ├── client/                  # React 19 + Tailwind CSS v4 SPA
 │   │   ├── components/          # StudioBuilder, GallerySurface, GalleryStyleControls, DonateModal, etc.
 │   │   ├── config/              # Donation QR config & select options
-│   │   ├── lib/                 # API client, browser ZIP builder, SEO hook
+│   │   ├── lib/                 # API client, browser ZIP streamer, per-route SEO hook
 │   │   └── pages/               # HomePage, GalleryPage, ManagePage
-│   ├── server/                  # Hono Worker API & Google Drive proxy
+│   ├── server/                  # Hono Worker API & Drive media proxy
 │   │   ├── routes/              # bible.ts, galleries.ts, media.ts
-│   │   ├── crypto.ts            # PBKDF2 password hashing & HMAC cookie signing
-│   │   ├── drive.ts             # Google Drive API v3 folder crawler & metadata fetcher
-│   │   ├── opaqueIds.ts         # Opaque file/folder ID mapping
-│   │   └── security.ts          # Rate limits, Turnstile check, origin validation
-│   └── shared/                  # Shared TS types, customization presets, contact/form URLs
+│   │   ├── crypto.ts            # PBKDF2-SHA256 hashing & HMAC session tokens
+│   │   ├── drive.ts             # Google Drive API v3 folder crawler
+│   │   ├── opaqueIds.ts         # Deterministic opaque file/folder ID mapping
+│   │   └── security.ts          # Rate limits, Turnstile verification, CSRF & schema checks
+│   └── shared/                  # Shared TS types, theme presets, Google Form links
 ├── test/                        # Vitest suite (api.test.ts, crypto.test.ts, drive.test.ts)
 ├── docs/
-│   └── CLOUDFLARE_DEPLOYMENT.md # Full production deployment guide for Cloudflare Workers + D1 + KV
-├── CHANGELOG.md                 # Release notes and version history
-└── wrangler.jsonc               # Cloudflare Workers, D1, KV, and public vars configuration
+│   └── CLOUDFLARE_DEPLOYMENT.md # Step-by-step Cloudflare Workers + D1 + KV guide
+├── CHANGELOG.md                 # Release notes & version history
+└── wrangler.jsonc               # Cloudflare Workers, D1, KV, and public variables config
 ```
+
+</details>
 
 ---
 
-## Tech Stack
+## 🛠️ Tech Stack
 
-- **Frontend:** React 19, Vite 6, Tailwind CSS v4, PhotoSwipe 5, Lucide Icons, `client-zip`
-- **Backend / Edge:** Cloudflare Workers (`@cloudflare/vite-plugin`), Hono 4
-- **Storage & Caching:** Cloudflare D1 (SQLite), Cloudflare KV, Google Drive API v3
-- **Testing:** Vitest + Cloudflare Vitest Pool Workers
-
----
-
-## Local Development
-
-### 1. Install Dependencies
-
-```bash
-npm install
-```
-
-### 2. Configure `.dev.vars`
-
-Copy `.dev.vars.example` to `.dev.vars` (never commit `.dev.vars`):
-
-```env
-GOOGLE_DRIVE_API_KEY=your_google_cloud_api_key_here
-COOKIE_SIGNING_SECRET=replace_with_at_least_32_character_random_hex_string
-TURNSTILE_SECRET_KEY=
-ADMIN_MODERATION_KEY=replace_with_strong_random_moderation_key
-PUBLIC_DONATE_URL=
-PUBLIC_FEEDBACK_FORM_URL=
-PUBLIC_REPORT_FORM_URL=
-PUBLIC_TURNSTILE_SITE_KEY=
-```
-
-> **Tip:** To obtain a free Google Drive API key, open **Google Cloud Console → APIs & Services → Library**, enable **Google Drive API**, create an **API key**, and restrict it to **Google Drive API**.
-
-### 3. Apply Local D1 Migrations
-
-```bash
-npm run db:migrate:local
-```
-
-### 4. Start the Dev Server
-
-```bash
-npm run dev
-```
-
-### 5. Run Verification Checks
-
-```bash
-npm run typecheck
-npm test
-npm run build
-```
+| Layer | Technology |
+| :--- | :--- |
+| **Frontend** | React 19, Vite 6, Tailwind CSS v4, PhotoSwipe 5, Lucide Icons, `client-zip` |
+| **Edge Backend** | Cloudflare Workers (`@cloudflare/vite-plugin`), Hono 4 |
+| **Database & Cache** | Cloudflare D1 (SQLite), Cloudflare KV, Google Drive API v3 |
+| **Testing** | Vitest 3 + Cloudflare Vitest Pool Workers |
 
 ---
 
-## Customization Notes
+## 🚀 Local Development
 
-- **Feedback & Report Forms:** Update `FEEDBACK_FORM_URL` and `REPORT_FORM_URL` in `src/shared/contact.ts`, or override them in production with `PUBLIC_FEEDBACK_FORM_URL` / `PUBLIC_REPORT_FORM_URL`.
-- **Donations (Maya QR):** Replace `public/qr/maya.png` (and update copy in `src/client/config/donate.ts` if needed) and/or set `PUBLIC_DONATE_URL`.
+<details open>
+<summary><strong>Step-by-step local setup</strong></summary>
+
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Create `.dev.vars`** from `.dev.vars.example` *(never commit `.dev.vars`)*:
+   ```env
+   GOOGLE_DRIVE_API_KEY=your_google_cloud_api_key_here
+   COOKIE_SIGNING_SECRET=replace_with_at_least_32_character_random_hex_string
+   TURNSTILE_SECRET_KEY=
+   ADMIN_MODERATION_KEY=replace_with_strong_random_moderation_key
+   PUBLIC_DONATE_URL=
+   PUBLIC_FEEDBACK_FORM_URL=
+   PUBLIC_REPORT_FORM_URL=
+   PUBLIC_TURNSTILE_SITE_KEY=
+   ```
+   > **Tip:** Enable **Google Drive API** in Google Cloud Console → *APIs & Services → Library*, generate an API key, and restrict it strictly to **Google Drive API**.
+
+3. **Apply local D1 migrations:**
+   ```bash
+   npm run db:migrate:local
+   ```
+
+4. **Run the dev server & verification checks:**
+   ```bash
+   npm run dev        # Start local Vite + Cloudflare Worker dev server
+   npm run typecheck  # TypeScript check
+   npm test           # Run Vitest unit & Worker API security tests
+   npm run build      # Build production SSR Worker & client assets
+   ```
+
+</details>
+
+<details>
+<summary><strong>Environment Variables &amp; Customization Reference</strong></summary>
+
+| Variable | Type | Purpose |
+| :--- | :--- | :--- |
+| `GOOGLE_DRIVE_API_KEY` | Secret | Google Cloud API key restricted to Google Drive API v3 |
+| `COOKIE_SIGNING_SECRET` | Secret | 32+ char secret for HMAC cookies (`uc_admin_*`, `uc_unlock_*`) & opaque IDs |
+| `ADMIN_MODERATION_KEY` | Secret | Operator key for moderation endpoints |
+| `TURNSTILE_SECRET_KEY` | Secret *(opt)* | Cloudflare Turnstile verification secret |
+| `PUBLIC_TURNSTILE_SITE_KEY` | Var *(opt)* | Turnstile widget site key |
+| `PUBLIC_FEEDBACK_FORM_URL` | Var *(opt)* | Overrides default feedback form URL in `src/shared/contact.ts` |
+| `PUBLIC_REPORT_FORM_URL` | Var *(opt)* | Overrides default abuse report form URL in `src/shared/contact.ts` |
+| `PUBLIC_DONATE_URL` | Var *(opt)* | Optional external donation URL (paired with `public/qr/maya.png`) |
+
+</details>
 
 ---
 
-## Production Deployment (Cloudflare Free Tier)
+## ☁️ Production Deployment
 
-See the complete step-by-step guide in **[docs/CLOUDFLARE_DEPLOYMENT.md](docs/CLOUDFLARE_DEPLOYMENT.md)** covering:
+Follow the complete guide in **[docs/CLOUDFLARE_DEPLOYMENT.md](docs/CLOUDFLARE_DEPLOYMENT.md)** for full Cloudflare Dashboard UI & CLI instructions (D1 + KV provisioning, remote migrations, secrets, Turnstile, and custom domains).
 
-1. Creating the Cloudflare D1 database and KV namespace
-2. Updating `wrangler.jsonc` bindings and running remote migrations
-3. Generating and setting encrypted Wrangler secrets
-4. Optional Turnstile bot protection and custom domain routing
-5. Post-deploy health, SEO, and security checks
-
-Quick deploy command once D1, KV, and secrets are configured:
+Quick deploy after D1, KV, and secrets are configured:
 
 ```bash
 npm run db:migrate:remote
@@ -127,16 +172,16 @@ npm run deploy
 
 ---
 
-## Releases & Versioning
+## 🔒 Security Model
 
-Release notes and upgrade steps are tracked in **[CHANGELOG.md](CHANGELOG.md)** and tagged on GitHub under **Releases**.
+- **30-Day `HttpOnly` Manage Cookies & Token Rotation:** Manage links exchange `#token` fragments into `HttpOnly`, `SameSite=Lax`, HMAC-signed `uc_admin_<slug>` cookies (`Path=/api/galleries`), with instant token rotation in **Manage → Access**.
+- **Opaque Proxy Identifiers:** Public responses and `/api/media/:slug/:fileId` URLs expose HMAC-derived opaque IDs rather than raw Google Drive IDs.
+- **Zero-Trust Validation:** PBKDF2-SHA256 gallery passwords (`6–128` chars), same-origin CSRF enforcement on mutating API calls, strict `(slug, fileId)` proxy allowlisting, per-IP rate limits, bounded JSON payloads, and optional Turnstile verification.
 
-To create a new release from an updated `main` branch:
+---
 
-```bash
-npm run typecheck && npm test && npm run build
-git tag -a v1.0.0 -m "Release v1.0.0"
-git push origin main --follow-tags
-```
+## 📦 Releases & Support
 
-Then open **GitHub → Releases → Draft a new release**, select the pushed tag, paste the matching notes from `CHANGELOG.md`, and publish.
+- **Changelog:** Tracked in **[CHANGELOG.md](CHANGELOG.md)** and [GitHub Releases](https://github.com/josiahjezraelguevarra/UnwrittenChapters/releases).
+- **Feedback & Suggestions:** [Submit via Google Form](https://forms.gle/WMc6seyhcdsagxwF7)
+- **Report a Gallery / DMCA:** [Submit via Google Form](https://forms.gle/6vnSTLan1Pc5CZih9)

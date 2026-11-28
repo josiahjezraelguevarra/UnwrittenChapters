@@ -1,5 +1,8 @@
-import type { CSSProperties, RefObject } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import {
+  ArrowUp,
+  ChevronDown,
+  Columns2,
   Download,
   ExternalLink,
   Flag,
@@ -8,10 +11,13 @@ import {
   Image as ImageIcon,
   LayoutGrid,
   Loader2,
+  Maximize,
   Play,
   Rows3,
+  Search,
   Square,
-  Video as VideoIcon
+  Video as VideoIcon,
+  X
 } from 'lucide-react';
 import {
   CARD_RADIUS_META,
@@ -66,6 +72,8 @@ export interface GallerySurfaceProps {
   onMediaFilterChange: (filter: MediaFilter) => void;
   selectedFolderPath: string;
   onSelectedFolderPathChange: (path: string) => void;
+  searchQuery?: string;
+  onSearchQueryChange?: (q: string) => void;
   filteredItems: MediaItem[];
   gridRef?: RefObject<HTMLDivElement | null>;
   previewMode?: boolean;
@@ -76,6 +84,7 @@ export interface GallerySurfaceProps {
   onBatchDownload?: () => void;
   onCancelZip?: () => void;
   onToggleLike?: (fileId: string) => void;
+  onOpenItem?: (item: MediaItem) => void;
   onOpenVideo?: (item: MediaItem) => void;
   onOpenDonate?: () => void;
   onOpenReport?: () => void;
@@ -98,6 +107,8 @@ export function GallerySurface({
   onMediaFilterChange,
   selectedFolderPath,
   onSelectedFolderPathChange,
+  searchQuery = '',
+  onSearchQueryChange,
   filteredItems,
   gridRef,
   previewMode = false,
@@ -108,6 +119,7 @@ export function GallerySurface({
   onBatchDownload,
   onCancelZip,
   onToggleLike,
+  onOpenItem,
   onOpenVideo,
   onOpenDonate,
   onOpenReport,
@@ -133,6 +145,90 @@ export function GallerySurface({
   const resolveThumb = (fileId: string, width: number) =>
     previewImageMap?.[fileId] || mediaThumbUrl(slug, fileId, width);
 
+  const toolbarRef = useRef<HTMLElement>(null);
+  const internalGridRef = useRef<HTMLDivElement>(null);
+  const activeGridRef = gridRef ?? internalGridRef;
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [galleryRevealed, setGalleryRevealed] = useState(
+    previewMode || heroStyle !== 'fullscreen'
+  );
+
+  useEffect(() => {
+    if (previewMode) return;
+    const onScroll = () => setShowScrollTop(window.scrollY > 560);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [previewMode]);
+
+  useEffect(() => {
+    if (previewMode || heroStyle !== 'fullscreen') {
+      setGalleryRevealed(true);
+      return;
+    }
+    const target = toolbarRef.current;
+    if (!target || typeof IntersectionObserver === 'undefined') {
+      setGalleryRevealed(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setGalleryRevealed(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.05 }
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [previewMode, heroStyle]);
+
+  useEffect(() => {
+    if (previewMode) return;
+    const container = activeGridRef.current;
+    if (!container) return;
+    const cards = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-gallery-card="true"]')
+    );
+    if (cards.length === 0) return;
+
+    if (
+      typeof IntersectionObserver === 'undefined' ||
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    ) {
+      cards.forEach((el) => el.classList.add('uc-card-visible'));
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        let batchIdx = 0;
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const el = entry.target as HTMLElement;
+          el.style.transitionDelay = `${Math.min(batchIdx * 45, 225)}ms`;
+          el.classList.add('uc-card-visible');
+          observer.unobserve(el);
+          batchIdx += 1;
+        }
+      },
+      { rootMargin: '0px 0px -30px 0px', threshold: 0.04 }
+    );
+
+    cards.forEach((el) => {
+      if (!el.classList.contains('uc-card-visible')) {
+        observer.observe(el);
+      }
+    });
+
+    return () => observer.disconnect();
+  }, [previewMode, activeGridRef, filteredItems, layout]);
+
+  const scrollToGallery = () => {
+    setGalleryRevealed(true);
+    toolbarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   const hasSubfolders = folders.length > 1;
   const photoCount = items.filter((i) => i.kind === 'image').length;
   const videoCount = items.filter((i) => i.kind === 'video').length;
@@ -143,26 +239,38 @@ export function GallerySurface({
     layout === 'masonry'
       ? previewMode
         ? isMobilePreview
-          ? 'columns-1'
+          ? 'columns-2'
           : 'columns-2 md:columns-3'
         : 'masonry-columns'
       : layout === 'justified'
         ? 'justified-grid'
-        : previewMode
-          ? isMobilePreview
-            ? 'grid grid-cols-2'
-            : 'grid grid-cols-2 sm:grid-cols-3'
-          : 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5';
+        : layout === 'large'
+          ? previewMode
+            ? isMobilePreview
+              ? 'mx-auto grid max-w-5xl grid-cols-1'
+              : 'mx-auto grid max-w-5xl grid-cols-1 sm:grid-cols-2'
+            : 'mx-auto grid max-w-5xl grid-cols-1 md:grid-cols-2'
+          : layout === 'editorial'
+            ? previewMode
+              ? isMobilePreview
+                ? 'grid grid-cols-2'
+                : 'grid grid-cols-2 sm:grid-cols-4'
+              : 'grid grid-cols-2 md:grid-cols-4'
+            : previewMode
+              ? isMobilePreview
+                ? 'grid grid-cols-2'
+                : 'grid grid-cols-2 sm:grid-cols-3'
+              : 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5';
 
   const gridContainerStyle: CSSProperties | undefined =
-    layout === 'grid'
+    layout === 'grid' || layout === 'large' || layout === 'editorial'
       ? { gap: gapCss }
       : layout === 'masonry' && previewMode
         ? { columnGap: gapCss }
         : undefined;
 
   const innerMediaRadius =
-    cardStyle === 'mat'
+    cardStyle === 'mat' || cardStyle === 'polaroid'
       ? radiusCss === '0px'
         ? '0px'
         : '0.45rem'
@@ -172,33 +280,16 @@ export function GallerySurface({
 
   const renderBrandHeader = () => (
     <div className="flex flex-wrap items-center justify-between gap-4">
-      {gallery.brandName ? (
-        gallery.brandUrl ? (
-          <a
-            href={gallery.brandUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={previewMode ? (e) => e.preventDefault() : undefined}
-            className="inline-flex items-center gap-1.5 text-sm font-semibold tracking-wide uppercase opacity-85 hover:opacity-100"
-          >
-            <span>{gallery.brandName}</span>
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        ) : (
-          <span className="text-sm font-semibold tracking-wide uppercase opacity-85">
-            {gallery.brandName}
-          </span>
-        )
-      ) : (
-        <span className="inline-flex items-center gap-2 text-sm font-semibold tracking-wide uppercase opacity-85">
-          <img
-            src="/logo.svg"
-            alt=""
-            className="h-6 w-6 object-contain"
-          />
-          <span>{appName}</span>
+      <span className="inline-flex items-center gap-2.5">
+        <img
+          src="/logo.svg"
+          alt=""
+          className="h-7 w-7 shrink-0 object-contain sm:h-8 sm:w-8"
+        />
+        <span className="uc-font-serif text-lg font-semibold tracking-tight sm:text-xl">
+          {appName}
         </span>
-      )}
+      </span>
 
       <button
         type="button"
@@ -216,9 +307,31 @@ export function GallerySurface({
     </div>
   );
 
+  const renderStudioEyebrow = (centered = false) => {
+    if (!gallery.brandName) return null;
+    const baseClass = `inline-flex items-center gap-1.5 text-xs font-semibold tracking-[0.2em] uppercase opacity-85 ${
+      centered ? 'mb-3 justify-center' : 'mt-5 mb-2'
+    }`;
+    if (gallery.brandUrl) {
+      return (
+        <a
+          href={gallery.brandUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={previewMode ? (e) => e.preventDefault() : undefined}
+          className={`${baseClass} underline-offset-4 transition hover:underline hover:opacity-100`}
+        >
+          <span>{gallery.brandName}</span>
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      );
+    }
+    return <p className={baseClass}>{gallery.brandName}</p>;
+  };
+
   return (
     <div
-      className={`${previewMode ? 'min-h-full' : 'min-h-screen pb-12'} transition-colors duration-200`}
+      className={`${previewMode ? 'min-h-full' : 'min-h-screen pb-[calc(5.5rem+env(safe-area-inset-bottom))]'} transition-colors duration-200`}
       style={
         {
           backgroundColor: tokens.bg,
@@ -230,49 +343,171 @@ export function GallerySurface({
       }
     >
       {/* Hero Cover */}
-      <header
-        className="relative overflow-hidden border-b"
-        style={{ borderColor: tokens.border }}
-      >
-        {heroStyle === 'banner' && coverId && (
-          <div className="absolute inset-0">
-            <img
-              src={resolveThumb(coverId, previewMode ? 1200 : 1600)}
-              alt=""
-              className="h-full w-full object-cover opacity-35 blur-xs"
-            />
-            <div
-              className="absolute inset-0"
-              style={{
-                background: `linear-gradient(to bottom, ${hexToRgba(tokens.bg, 0.52)}, ${hexToRgba(
-                  tokens.bg,
-                  0.84
-                )} 65%, ${tokens.bg})`
-              }}
-            />
-          </div>
-        )}
-
-        <div
-          className={`relative mx-auto max-w-6xl ${
+      {heroStyle === 'fullscreen' ? (
+        <header
+          className={`relative flex flex-col justify-between overflow-hidden border-b ${
             previewMode
               ? isMobilePreview
-                ? 'px-4 py-7'
-                : 'px-5 py-9'
-              : 'px-4 py-12 sm:px-6 sm:py-16'
+                ? 'min-h-[380px]'
+                : 'min-h-[440px]'
+              : 'min-h-[100svh]'
           }`}
+          style={{
+            borderColor: tokens.border,
+            color: coverId ? '#ffffff' : tokens.fg
+          }}
         >
-          {renderBrandHeader()}
+          {coverId && (
+            <div className="absolute inset-0 overflow-hidden">
+              <img
+                src={resolveThumb(coverId, previewMode ? 1200 : 1600)}
+                alt=""
+                className={`h-full w-full object-cover ${previewMode ? 'scale-[1.02]' : 'uc-hero-zoom'}`}
+              />
+              <div
+                className="absolute inset-0"
+                style={{
+                  background:
+                    'linear-gradient(to bottom, rgba(10,10,12,0.45), rgba(10,10,12,0.52) 52%, rgba(10,10,12,0.78))'
+                }}
+              />
+            </div>
+          )}
 
-          {heroStyle === 'split' && coverId ? (
-            <div
-              className={`mt-6 grid grid-cols-1 items-center gap-6 ${
-                isMobilePreview ? '' : 'md:grid-cols-12 md:gap-8'
+          <div className="relative z-10 mx-auto w-full max-w-6xl px-4 pt-6 sm:px-6 sm:pt-8">
+            {renderBrandHeader()}
+          </div>
+
+          <div className="relative z-10 mx-auto flex max-w-3xl flex-1 flex-col items-center justify-center px-5 py-10 text-center">
+            {renderStudioEyebrow(true)}
+            <h1
+              className={`font-bold tracking-tight ${
+                isMobilePreview
+                  ? 'text-3xl'
+                  : previewMode
+                    ? 'text-4xl'
+                    : 'text-4xl sm:text-6xl'
               }`}
+              style={{ fontFamily: fontMeta.headingFamily }}
             >
-              <div className={isMobilePreview ? '' : 'md:col-span-7'}>
+              {gallery.title || 'Untitled Gallery'}
+            </h1>
+            {gallery.description && (
+              <p className="mt-4 max-w-xl text-sm leading-relaxed opacity-90 sm:text-base">
+                {gallery.description}
+              </p>
+            )}
+            <p className="mt-4 text-xs font-medium tracking-wide opacity-80">
+              {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
+              {videoCount > 0 ? ` · ${videoCount} ${videoCount === 1 ? 'video' : 'videos'}` : ''}
+              {hasSubfolders ? ` · ${folders.length} chapters` : ''}
+              {!previewMode ? ` · ${gallery.viewCount + 1} views` : ''}
+            </p>
+          </div>
+
+          <div className="relative z-10 flex justify-center pb-8 sm:pb-12">
+            <button
+              type="button"
+              onClick={previewMode ? undefined : scrollToGallery}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-white/35 bg-black/35 px-5 text-xs font-semibold tracking-wide text-white backdrop-blur-md transition hover:bg-black/55"
+            >
+              <span>View Gallery</span>
+              <ChevronDown className="uc-hero-bounce h-4 w-4" />
+            </button>
+          </div>
+        </header>
+      ) : (
+        <header
+          className="relative overflow-hidden border-b"
+          style={{ borderColor: tokens.border }}
+        >
+          {heroStyle === 'banner' && coverId && (
+            <div className="absolute inset-0">
+              <img
+                src={resolveThumb(coverId, previewMode ? 1200 : 1600)}
+                alt=""
+                className="h-full w-full object-cover opacity-35 blur-xs"
+              />
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: `linear-gradient(to bottom, ${hexToRgba(tokens.bg, 0.52)}, ${hexToRgba(
+                    tokens.bg,
+                    0.84
+                  )} 65%, ${tokens.bg})`
+                }}
+              />
+            </div>
+          )}
+
+          <div
+            className={`relative mx-auto max-w-6xl ${
+              previewMode
+                ? isMobilePreview
+                  ? 'px-4 py-7'
+                  : 'px-5 py-9'
+                : 'px-4 py-12 sm:px-6 sm:py-16'
+            }`}
+          >
+            {renderBrandHeader()}
+
+            {heroStyle === 'split' && coverId ? (
+              <div
+                className={`mt-6 grid grid-cols-1 items-center gap-6 ${
+                  isMobilePreview ? '' : 'md:grid-cols-12 md:gap-8'
+                }`}
+              >
+                <div className={isMobilePreview ? '' : 'md:col-span-7'}>
+                  {renderStudioEyebrow(false)}
+                  <h1
+                    className={`font-bold tracking-tight ${
+                      isMobilePreview
+                        ? 'text-2xl'
+                        : previewMode
+                          ? 'text-3xl sm:text-4xl'
+                          : 'text-3xl sm:text-5xl'
+                    }`}
+                    style={{ fontFamily: fontMeta.headingFamily }}
+                  >
+                    {gallery.title || 'Untitled Gallery'}
+                  </h1>
+                  {gallery.description && (
+                    <p
+                      className="mt-3 max-w-2xl text-sm sm:text-base"
+                      style={{ color: tokens.mutedFg }}
+                    >
+                      {gallery.description}
+                    </p>
+                  )}
+                  <p className="mt-4 text-xs font-medium" style={{ color: tokens.mutedFg }}>
+                    {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
+                    {videoCount > 0 ? ` · ${videoCount} ${videoCount === 1 ? 'video' : 'videos'}` : ''}
+                    {hasSubfolders ? ` · ${folders.length} folders` : ''}
+                    {!previewMode ? ` · ${gallery.viewCount + 1} views` : ''}
+                  </p>
+                </div>
+                <div className={isMobilePreview ? '' : 'md:col-span-5'}>
+                  <div
+                    className="overflow-hidden border shadow-md"
+                    style={{
+                      borderRadius: radiusCss,
+                      borderColor: tokens.border,
+                      backgroundColor: tokens.surface
+                    }}
+                  >
+                    <img
+                      src={resolveThumb(coverId, previewMode ? 800 : 1200)}
+                      alt=""
+                      className="aspect-[4/3] w-full object-cover"
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div>
+                {renderStudioEyebrow(false)}
                 <h1
-                  className={`font-bold tracking-tight ${
+                  className={`${gallery.brandName ? 'mt-1' : 'mt-4'} font-bold tracking-tight ${
                     isMobilePreview
                       ? 'text-2xl'
                       : previewMode
@@ -298,58 +533,15 @@ export function GallerySurface({
                   {!previewMode ? ` · ${gallery.viewCount + 1} views` : ''}
                 </p>
               </div>
-              <div className={isMobilePreview ? '' : 'md:col-span-5'}>
-                <div
-                  className="overflow-hidden border shadow-md"
-                  style={{
-                    borderRadius: radiusCss,
-                    borderColor: tokens.border,
-                    backgroundColor: tokens.surface
-                  }}
-                >
-                  <img
-                    src={resolveThumb(coverId, previewMode ? 800 : 1200)}
-                    alt=""
-                    className="aspect-[4/3] w-full object-cover"
-                  />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <h1
-                className={`mt-4 font-bold tracking-tight ${
-                  isMobilePreview
-                    ? 'text-2xl'
-                    : previewMode
-                      ? 'text-3xl sm:text-4xl'
-                      : 'text-3xl sm:text-5xl'
-                }`}
-                style={{ fontFamily: fontMeta.headingFamily }}
-              >
-                {gallery.title || 'Untitled Gallery'}
-              </h1>
-              {gallery.description && (
-                <p
-                  className="mt-3 max-w-2xl text-sm sm:text-base"
-                  style={{ color: tokens.mutedFg }}
-                >
-                  {gallery.description}
-                </p>
-              )}
-              <p className="mt-4 text-xs font-medium" style={{ color: tokens.mutedFg }}>
-                {photoCount} {photoCount === 1 ? 'photo' : 'photos'}
-                {videoCount > 0 ? ` · ${videoCount} ${videoCount === 1 ? 'video' : 'videos'}` : ''}
-                {hasSubfolders ? ` · ${folders.length} folders` : ''}
-                {!previewMode ? ` · ${gallery.viewCount + 1} views` : ''}
-              </p>
-            </div>
-          )}
-        </div>
-      </header>
+            )}
+          </div>
+        </header>
+      )}
 
       {/* Toolbar */}
       <nav
+        ref={toolbarRef}
+        id="gallery-toolbar"
         aria-label="Gallery filters and actions"
         className="sticky top-0 z-20 border-b backdrop-blur-md transition-colors"
         style={{
@@ -358,11 +550,11 @@ export function GallerySurface({
         }}
       >
         <div
-          className={`mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2.5 px-4 py-2.5 ${
+          className={`mx-auto flex max-w-6xl flex-col gap-2 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between ${
             previewMode ? '' : 'sm:px-6 sm:py-3'
           }`}
         >
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 sm:flex-wrap sm:gap-2 sm:overflow-visible sm:pb-0">
             {(
               [
                 ['all', `All (${items.length})`],
@@ -379,7 +571,7 @@ export function GallerySurface({
                   key={key}
                   type="button"
                   onClick={() => onMediaFilterChange(key)}
-                  className="min-h-[36px] rounded-full px-3 text-xs font-medium transition hover:opacity-90"
+                  className="min-h-[38px] shrink-0 rounded-full px-3 text-xs font-medium whitespace-nowrap transition hover:opacity-90"
                   style={
                     active
                       ? activeAccentStyle
@@ -395,7 +587,36 @@ export function GallerySurface({
             })}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 sm:justify-end">
+            {!previewMode && onSearchQueryChange && items.length > 12 && (
+              <div className="relative flex-1 sm:w-44 sm:flex-initial">
+                <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 opacity-55" />
+                <input
+                  type="search"
+                  aria-label="Search filenames"
+                  value={searchQuery}
+                  onChange={(e) => onSearchQueryChange(e.target.value)}
+                  placeholder="Search photo..."
+                  className="min-h-[36px] w-full rounded-lg border pr-7 pl-8 text-xs focus:outline-none sm:min-h-[34px]"
+                  style={{
+                    borderColor: tokens.border,
+                    backgroundColor: tokens.surfaceMuted,
+                    color: tokens.fg
+                  }}
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => onSearchQueryChange('')}
+                    className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded p-0.5 opacity-60 hover:opacity-100"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
+
             <div
               role="group"
               aria-label="Layout mode"
@@ -409,7 +630,9 @@ export function GallerySurface({
                 [
                   ['masonry', LayoutGrid, 'Masonry layout'],
                   ['justified', Rows3, 'Justified rows layout'],
-                  ['grid', Square, 'Square grid layout']
+                  ['grid', Square, 'Square grid layout'],
+                  ['large', Maximize, 'Large showcase layout'],
+                  ['editorial', Columns2, 'Editorial magazine layout']
                 ] as const
               ).map(([mode, Icon, label]) => {
                 const active = layout === mode;
@@ -421,7 +644,7 @@ export function GallerySurface({
                     aria-pressed={active}
                     title={label}
                     onClick={() => onLayoutChange(mode)}
-                    className={`flex min-h-[32px] min-w-[32px] items-center justify-center rounded-md transition ${
+                    className={`flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md transition sm:min-h-[32px] sm:min-w-[32px] ${
                       active ? 'shadow-2xs' : 'opacity-60 hover:opacity-100'
                     }`}
                     style={
@@ -441,7 +664,7 @@ export function GallerySurface({
                 type="button"
                 disabled={Boolean(zipProgress)}
                 onClick={previewMode ? undefined : onBatchDownload}
-                className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl px-3.5 text-xs font-semibold transition hover:opacity-90 disabled:opacity-75"
+                className="inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold transition hover:opacity-90 disabled:opacity-75 sm:px-3.5"
                 style={activeAccentStyle}
               >
                 {zipProgress ? (
@@ -454,7 +677,8 @@ export function GallerySurface({
                 ) : (
                   <>
                     <Download className="h-3.5 w-3.5" />
-                    <span>Download ZIP ({filteredItems.length})</span>
+                    <span className="sm:hidden">ZIP ({filteredItems.length})</span>
+                    <span className="hidden sm:inline">Download ZIP ({filteredItems.length})</span>
                   </>
                 )}
               </button>
@@ -593,6 +817,7 @@ export function GallerySurface({
               onClick={() => {
                 onMediaFilterChange('all');
                 onSelectedFolderPathChange('__ALL__');
+                onSearchQueryChange?.('');
               }}
               className="mt-4 min-h-[40px] rounded-xl px-4 text-xs font-medium"
               style={activeAccentStyle}
@@ -601,21 +826,37 @@ export function GallerySurface({
             </button>
           </div>
         ) : (
-          <div ref={gridRef} className={gridContainerClass} style={gridContainerStyle}>
-            {filteredItems.map((item) => {
+          <div
+            ref={activeGridRef}
+            className={`${gridContainerClass} ${galleryRevealed ? 'uc-slide-reveal' : 'opacity-0'}`}
+            style={gridContainerStyle}
+          >
+            {filteredItems.map((item, idx) => {
               const liked = visitorLikes.has(item.id);
               const count = likeCounts[item.id] || 0;
-              const thumbSrc = resolveThumb(item.id, previewMode ? 600 : 800);
-              const fullSrc = previewImageMap?.[item.id] || mediaFullUrl(slug, item.id, false);
+              const thumbSrc = resolveThumb(
+                item.id,
+                previewMode ? 600 : layout === 'large' || (layout === 'editorial' && idx % 5 === 0) ? 1200 : 800
+              );
+              const isEditorialHero = layout === 'editorial' && idx % 5 === 0;
               const aspectRatio =
-                layout === 'grid' ? '1 / 1' : `${item.width || 4} / ${item.height || 3}`;
+                layout === 'grid'
+                  ? '1 / 1'
+                  : isEditorialHero
+                    ? '16 / 10'
+                    : layout === 'editorial'
+                      ? '4 / 5'
+                      : `${item.width || 4} / ${item.height || 3}`;
 
+              const cardMotionClass = previewMode ? '' : 'uc-gallery-card ';
               const cardClass =
                 layout === 'masonry'
-                  ? 'masonry-item group relative overflow-hidden'
+                  ? `${cardMotionClass}masonry-item group relative overflow-hidden`
                   : layout === 'justified'
-                    ? 'justified-item group relative flex flex-col overflow-hidden'
-                    : 'group relative overflow-hidden';
+                    ? `${cardMotionClass}justified-item group relative flex flex-col overflow-hidden`
+                    : isEditorialHero
+                      ? `${cardMotionClass}col-span-2 group relative overflow-hidden`
+                      : `${cardMotionClass}group relative overflow-hidden`;
 
               const justifiedFlexGrow =
                 layout === 'justified'
@@ -630,13 +871,29 @@ export function GallerySurface({
                 ...justifiedFlexGrow,
                 borderRadius: radiusCss,
                 backgroundColor:
-                  cardStyle === 'clean' ? tokens.cardBg : tokens.surface,
+                  cardStyle === 'clean'
+                    ? tokens.cardBg
+                    : cardStyle === 'polaroid'
+                      ? '#ffffff'
+                      : tokens.surface,
                 ...(cardStyle === 'framed' || cardStyle === 'mat'
                   ? { border: `1px solid ${tokens.border}` }
                   : {}),
                 ...(cardStyle === 'mat'
                   ? { padding: previewMode ? '8px' : '12px' }
-                  : {})
+                  : cardStyle === 'polaroid'
+                    ? {
+                        border: `1px solid ${tokens.border}`,
+                        padding: previewMode ? '8px 8px 22px' : '12px 12px 32px',
+                        boxShadow: '0 8px 24px rgba(15, 23, 42, 0.12)',
+                        color: '#141311'
+                      }
+                    : cardStyle === 'shadow'
+                      ? {
+                          border: `1px solid ${tokens.border}`,
+                          boxShadow: '0 14px 32px rgba(15, 23, 42, 0.18)'
+                        }
+                      : {})
               };
 
               const mediaWrapperClass =
@@ -645,26 +902,34 @@ export function GallerySurface({
                   : 'relative overflow-hidden';
 
               return (
-                <article key={item.id} className={cardClass} style={articleStyle}>
+                <article
+                  key={item.id}
+                  data-gallery-card={previewMode ? undefined : 'true'}
+                  className={cardClass}
+                  style={articleStyle}
+                >
                   <div
-                    className={mediaWrapperClass}
+                    className={`${mediaWrapperClass} ${!gallery.allowDownload ? 'select-none' : ''}`}
                     style={{ borderRadius: innerMediaRadius }}
+                    onContextMenu={
+                      !previewMode && !gallery.allowDownload
+                        ? (e) => e.preventDefault()
+                        : undefined
+                    }
                   >
                     {item.kind === 'image' ? (
                       <button
                         type="button"
-                        data-pswp-photo={previewMode ? undefined : 'true'}
-                        data-pswp-src={previewMode ? undefined : fullSrc}
-                        data-pswp-width={item.width || 1600}
-                        data-pswp-height={item.height || 1200}
+                        onClick={previewMode ? undefined : () => onOpenItem?.(item)}
                         aria-label={`View ${item.name}`}
-                        className="block h-full w-full cursor-zoom-in text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+                        className="block h-full w-full cursor-pointer text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
                       >
                         <img
                           src={thumbSrc}
                           alt={item.name}
                           loading="lazy"
                           decoding="async"
+                          draggable={gallery.allowDownload}
                           style={layout === 'justified' ? undefined : { aspectRatio }}
                           className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
                         />
@@ -672,7 +937,11 @@ export function GallerySurface({
                     ) : (
                       <button
                         type="button"
-                        onClick={previewMode ? undefined : () => onOpenVideo?.(item)}
+                        onClick={
+                          previewMode
+                            ? undefined
+                            : () => (onOpenItem ? onOpenItem(item) : onOpenVideo?.(item))
+                        }
                         aria-label={`Play video ${item.name}`}
                         style={layout === 'justified' ? undefined : { aspectRatio }}
                         className="relative block h-full w-full overflow-hidden text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
@@ -682,6 +951,7 @@ export function GallerySurface({
                           alt={item.name}
                           loading="lazy"
                           decoding="async"
+                          draggable={gallery.allowDownload}
                           className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
                         />
                         <span className="absolute inset-0 flex items-center justify-center bg-black/20 transition duration-200 group-hover:bg-black/35">
@@ -765,8 +1035,13 @@ export function GallerySurface({
                     )}
                   </div>
 
-                  {/* Always-Visible Editorial Caption Plaque */}
-                  {captionMode === 'below' && (
+                  {/* Polaroid / Always-Visible Editorial Caption Plaque */}
+                  {cardStyle === 'polaroid' && captionMode !== 'hidden' ? (
+                    <p className="mt-2 truncate text-center text-[11px] font-medium tracking-tight text-[#141311]/80">
+                      {item.name}
+                    </p>
+                  ) : (
+                    captionMode === 'below' && (
                     <div
                       className={`shrink-0 ${
                         cardStyle === 'mat'
@@ -796,7 +1071,7 @@ export function GallerySurface({
                         )}
                       </p>
                     </div>
-                  )}
+                  ))}
                 </article>
               );
             })}
@@ -855,6 +1130,22 @@ export function GallerySurface({
             )}
           </div>
         </footer>
+      )}
+
+      {!previewMode && showScrollTop && (
+        <button
+          type="button"
+          aria-label="Scroll back to top"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed right-4 bottom-16 z-30 flex h-11 w-11 items-center justify-center rounded-full border shadow-lg backdrop-blur-md transition hover:scale-105"
+          style={{
+            backgroundColor: hexToRgba(tokens.surface, 0.92),
+            borderColor: tokens.border,
+            color: tokens.fg
+          }}
+        >
+          <ArrowUp className="h-4 w-4" />
+        </button>
       )}
 
       {!previewMode && (

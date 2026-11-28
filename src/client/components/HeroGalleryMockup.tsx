@@ -12,13 +12,46 @@ interface SampleFrame {
   tone: 'arch' | 'horizon' | 'window' | 'ridge' | 'floral' | 'studio';
 }
 
-const SAMPLE_FRAMES: SampleFrame[] = [
-  { id: '1', aspect: 'aspect-[3/4]', likes: 14, tone: 'arch' },
-  { id: '2', aspect: 'aspect-[4/3]', isVideo: true, tone: 'horizon' },
-  { id: '3', aspect: 'aspect-[4/5]', likes: 9, tone: 'window' },
-  { id: '4', aspect: 'aspect-[3/4]', likes: 6, tone: 'floral' },
-  { id: '5', aspect: 'aspect-[4/3]', tone: 'ridge' },
-  { id: '6', aspect: 'aspect-[3/4]', likes: 19, tone: 'studio' }
+const SAMPLE_FRAMES: Record<string, SampleFrame> = {
+  arch: { id: 'arch', aspect: 'aspect-[3/4]', likes: 14, tone: 'arch' },
+  horizon: { id: 'horizon', aspect: 'aspect-[4/3]', isVideo: true, tone: 'horizon' },
+  window: { id: 'window', aspect: 'aspect-[4/5]', likes: 9, tone: 'window' },
+  floral: { id: 'floral', aspect: 'aspect-[3/4]', likes: 6, tone: 'floral' },
+  ridge: { id: 'ridge', aspect: 'aspect-[4/3]', tone: 'ridge' },
+  studio: { id: 'studio', aspect: 'aspect-[3/4]', likes: 19, tone: 'studio' }
+};
+
+// Every column sums to one 3/4 + one 4/3 + one 4/5 tile so column heights match exactly
+// with zero blank whitespace between repeating scroll cycles.
+const DESKTOP_COLUMNS: Array<Array<{ tone: SampleFrame['tone']; aspect: string; likes?: number; isVideo?: boolean }>> = [
+  [
+    { ...SAMPLE_FRAMES.arch, aspect: 'aspect-[3/4]' },
+    { ...SAMPLE_FRAMES.ridge, aspect: 'aspect-[4/3]' },
+    { ...SAMPLE_FRAMES.window, aspect: 'aspect-[4/5]' }
+  ],
+  [
+    { ...SAMPLE_FRAMES.horizon, aspect: 'aspect-[4/3]' },
+    { ...SAMPLE_FRAMES.floral, aspect: 'aspect-[3/4]' },
+    { ...SAMPLE_FRAMES.window, aspect: 'aspect-[4/5]', likes: 11 }
+  ],
+  [
+    { ...SAMPLE_FRAMES.window, aspect: 'aspect-[4/5]', likes: 9 },
+    { ...SAMPLE_FRAMES.studio, aspect: 'aspect-[3/4]' },
+    { ...SAMPLE_FRAMES.ridge, aspect: 'aspect-[4/3]' }
+  ]
+];
+
+const MOBILE_COLUMNS: Array<Array<{ tone: SampleFrame['tone']; aspect: string; likes?: number; isVideo?: boolean }>> = [
+  [
+    { ...SAMPLE_FRAMES.arch, aspect: 'aspect-[3/4]' },
+    { ...SAMPLE_FRAMES.horizon, aspect: 'aspect-[4/3]' },
+    { ...SAMPLE_FRAMES.window, aspect: 'aspect-[4/5]' }
+  ],
+  [
+    { ...SAMPLE_FRAMES.ridge, aspect: 'aspect-[4/3]' },
+    { ...SAMPLE_FRAMES.studio, aspect: 'aspect-[3/4]' },
+    { ...SAMPLE_FRAMES.floral, aspect: 'aspect-[4/5]', likes: 12 }
+  ]
 ];
 
 function SampleArtwork({ tone }: { tone: SampleFrame['tone'] }) {
@@ -82,7 +115,11 @@ function SampleArtwork({ tone }: { tone: SampleFrame['tone'] }) {
   }
 }
 
-function SampleFrameTile({ frame }: { frame: SampleFrame }) {
+function SampleFrameTile({
+  frame
+}: {
+  frame: Pick<SampleFrame, 'tone' | 'aspect' | 'likes' | 'isVideo'>;
+}) {
   return (
     <div className={`relative overflow-hidden rounded-lg bg-stone-200 ${frame.aspect}`}>
       <SampleArtwork tone={frame.tone} />
@@ -147,7 +184,7 @@ export function HeroGalleryMockup({ dark = false }: HeroGalleryMockupProps) {
         </div>
 
         {/* Sample Gallery Header */}
-        <div className={`border-b px-4 py-3.5 ${dark ? 'border-[#f4f1ea]/10' : 'border-[#141311]/10'}`}>
+        <div className={`border-b px-4 py-3 ${dark ? 'border-[#f4f1ea]/10' : 'border-[#141311]/10'}`}>
           <div className="flex items-center justify-between gap-2">
             <div>
               <p className="text-[11px] opacity-60">
@@ -161,7 +198,7 @@ export function HeroGalleryMockup({ dark = false }: HeroGalleryMockupProps) {
               Download ZIP
             </span>
           </div>
-          <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[10px] font-medium">
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-medium">
             <span className={`rounded-full px-2.5 py-0.5 ${pillActive}`}>All (148)</span>
             <span className={`rounded-full px-2.5 py-0.5 ${pillMuted}`}>Highlights</span>
             <span className={`rounded-full px-2.5 py-0.5 ${pillMuted}`}>Portraits</span>
@@ -170,25 +207,26 @@ export function HeroGalleryMockup({ dark = false }: HeroGalleryMockupProps) {
         </div>
 
         {/* Auto-scrolling Sample Gallery Grid */}
-        <div className="relative h-[265px] overflow-hidden px-3 pt-3 sm:h-[300px]">
-          <div className="uc-mockup-scroll grid grid-cols-3 gap-2.5">
+        <div className="relative h-[265px] overflow-hidden px-3 sm:h-[300px]">
+          <div className="uc-mockup-scroll pt-3">
             {[0, 1].map((loopIdx) => (
-              <div key={loopIdx} className="col-span-3 grid grid-cols-3 gap-2.5">
-                <div className="space-y-2.5">
-                  <SampleFrameTile frame={SAMPLE_FRAMES[0]} />
-                  <SampleFrameTile frame={SAMPLE_FRAMES[4]} />
-                </div>
-                <div className="space-y-2.5">
-                  <SampleFrameTile frame={SAMPLE_FRAMES[1]} />
-                  <SampleFrameTile frame={SAMPLE_FRAMES[3]} />
-                </div>
-                <div className="space-y-2.5">
-                  <SampleFrameTile frame={SAMPLE_FRAMES[2]} />
-                  <SampleFrameTile frame={SAMPLE_FRAMES[5]} />
-                </div>
+              <div key={loopIdx} className="grid grid-cols-3 gap-2.5 pb-2.5">
+                {DESKTOP_COLUMNS.map((col, colIdx) => (
+                  <div key={colIdx} className="flex flex-col gap-2.5">
+                    {col.map((tile, tileIdx) => (
+                      <SampleFrameTile key={`${loopIdx}-${colIdx}-${tileIdx}`} frame={tile} />
+                    ))}
+                  </div>
+                ))}
               </div>
             ))}
           </div>
+          <div
+            aria-hidden="true"
+            className={`pointer-events-none absolute inset-x-0 top-0 h-3 bg-gradient-to-b ${
+              dark ? 'from-[#191815] to-transparent' : 'from-white to-transparent'
+            }`}
+          />
           <div
             aria-hidden="true"
             className={`pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t ${
@@ -217,17 +255,26 @@ export function HeroGalleryMockup({ dark = false }: HeroGalleryMockupProps) {
           <p className="text-[10px] opacity-55">Mobile</p>
           <p className="uc-font-serif truncate text-xs font-semibold tracking-tight">UnwrittenChapters</p>
         </div>
-        <div className="relative h-[165px] overflow-hidden px-2 pt-2">
-          <div className="uc-mockup-scroll-slow grid grid-cols-2 gap-1.5">
+        <div className="relative h-[165px] overflow-hidden px-2">
+          <div className="uc-mockup-scroll-slow pt-2">
             {[0, 1].map((loopIdx) => (
-              <div key={loopIdx} className="col-span-2 grid grid-cols-2 gap-1.5">
-                <SampleFrameTile frame={SAMPLE_FRAMES[0]} />
-                <SampleFrameTile frame={SAMPLE_FRAMES[5]} />
-                <SampleFrameTile frame={SAMPLE_FRAMES[2]} />
-                <SampleFrameTile frame={SAMPLE_FRAMES[3]} />
+              <div key={loopIdx} className="grid grid-cols-2 gap-1.5 pb-1.5">
+                {MOBILE_COLUMNS.map((col, colIdx) => (
+                  <div key={colIdx} className="flex flex-col gap-1.5">
+                    {col.map((tile, tileIdx) => (
+                      <SampleFrameTile key={`m-${loopIdx}-${colIdx}-${tileIdx}`} frame={tile} />
+                    ))}
+                  </div>
+                ))}
               </div>
             ))}
           </div>
+          <div
+            aria-hidden="true"
+            className={`pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t ${
+              dark ? 'from-[#141311] to-transparent' : 'from-white to-transparent'
+            }`}
+          />
         </div>
       </div>
     </div>

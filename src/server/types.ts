@@ -26,6 +26,7 @@ export interface Env {
   CACHE: KVNamespace;
   ASSETS?: Fetcher;
   GOOGLE_DRIVE_API_KEY: string;
+  GOOGLE_DRIVE_API_KEY_BACKUP?: string;
   COOKIE_SIGNING_SECRET?: string;
   TURNSTILE_SECRET_KEY?: string;
   ADMIN_MODERATION_KEY?: string;
@@ -40,6 +41,7 @@ export interface GalleryRow {
   id: string;
   slug: string;
   drive_folder_id: string;
+  drive_sources_json: string;
   title: string;
   description: string;
   cover_file_id: string | null;
@@ -61,6 +63,7 @@ export interface GalleryRow {
   admin_token_hash: string;
   allow_download: number;
   allow_likes: number;
+  auto_sync: number;
   expires_at: number | null;
   status: string;
   items_json: string;

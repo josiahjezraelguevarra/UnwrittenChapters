@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import {
   ArrowLeft,
   Check,
+  Columns2,
   Copy,
   Download,
   ExternalLink,
@@ -11,10 +12,13 @@ import {
   KeyRound,
   LayoutGrid,
   Lock,
+  Maximize,
   Maximize2,
   Minimize2,
   Monitor,
   Palette,
+  Plus,
+  QrCode,
   RefreshCw,
   RotateCcw,
   Rows3,
@@ -37,19 +41,20 @@ import type {
   PublicGalleryConfig
 } from '../../shared/types';
 import { sanitizeHexColor, type GalleryPalettePreset } from '../../shared/customization';
-import { SUPPORT_EMAIL, buildSupportMailto } from '../../shared/contact';
+import { ConfirmDeleteModal } from '../components/ConfirmDeleteModal';
 import { CustomSelect, type CustomSelectOption } from '../components/CustomSelect';
 import {
   GalleryStyleControls,
   type GalleryStyleValues
 } from '../components/GalleryStyleControls';
 import { GallerySurface, type MediaFilter } from '../components/GallerySurface';
+import { QrShareModal } from '../components/QrShareModal';
+import { StatusErrorPage } from '../components/StatusErrorPage';
 import { SupportErrorAlert } from '../components/SupportErrorAlert';
 import { ToggleField } from '../components/ToggleField';
 import {
   EXPIRY_SELECT_OPTIONS,
-  LAYOUT_SELECT_OPTIONS,
-  THEME_SELECT_OPTIONS
+  LAYOUT_SELECT_OPTIONS
 } from '../config/galleryOptions';
 import {
   ApiError,
@@ -114,7 +119,7 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
   const [backgroundColor, setBackgroundColor] = useState('');
   const [surfaceColor, setSurfaceColor] = useState('');
   const [textColor, setTextColor] = useState('');
-  const [heroStyle, setHeroStyle] = useState<GalleryHeroStyle>('banner');
+  const [heroStyle, setHeroStyle] = useState<GalleryHeroStyle>('fullscreen');
   const [cardStyle, setCardStyle] = useState<GalleryCardStyle>('clean');
   const [captionMode, setCaptionMode] = useState<GalleryCaptionMode>('hover');
   const [gridGap, setGridGap] = useState<GalleryGridGap>('normal');
@@ -122,6 +127,9 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
   const [coverFileId, setCoverFileId] = useState<string>('');
   const [allowDownload, setAllowDownload] = useState(true);
   const [allowLikes, setAllowLikes] = useState(true);
+  const [autoSync, setAutoSync] = useState(true);
+  const [driveSources, setDriveSources] = useState<string[]>([]);
+  const [savedDriveSources, setSavedDriveSources] = useState<string[]>([]);
   const [newPassword, setNewPassword] = useState('');
   const [clearPassword, setClearPassword] = useState(false);
   const [expiryAction, setExpiryAction] = useState<string>('');
@@ -133,14 +141,15 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
   const [copiedLightroom, setCopiedLightroom] = useState(false);
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const deleteDialogRef = useRef<HTMLDialogElement>(null);
 
   const [previewFilter, setPreviewFilter] = useState<MediaFilter>('all');
   const [previewFolderPath, setPreviewFolderPath] = useState<string>('__ALL__');
   const [previewViewport, setPreviewViewport] = useState<'desktop' | 'mobile'>('desktop');
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'design' | 'access'>('design');
+  const [designSection, setDesignSection] = useState<'layout' | 'colors' | 'framing'>('layout');
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -167,6 +176,7 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
     setCoverFileId(g.coverFileId || '');
     setAllowDownload(g.allowDownload);
     setAllowLikes(g.allowLikes);
+    setAutoSync(g.autoSync !== false);
     setNewPassword('');
     setClearPassword(false);
     setExpiryAction('');
@@ -185,6 +195,9 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
         setAuthRequired(false);
         setData(res);
         applyGalleryToForm(res.gallery);
+        const sources = res.driveSources || [];
+        setDriveSources(sources);
+        setSavedDriveSources(sources);
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
           setAuthRequired(true);
@@ -204,13 +217,6 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
     // Run once per slug mount using the initial URL hash if present
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
-
-  useEffect(() => {
-    const dialog = deleteDialogRef.current;
-    if (!dialog) return;
-    if (confirmDeleteOpen && !dialog.open) dialog.showModal();
-    else if (!confirmDeleteOpen && dialog.open) dialog.close();
-  }, [confirmDeleteOpen]);
 
   useEffect(() => {
     if (!previewFullscreen) return;
@@ -296,7 +302,8 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
       cardRadius,
       coverFileId: coverFileId || data.gallery.coverFileId,
       allowDownload,
-      allowLikes
+      allowLikes,
+      autoSync
     };
   }, [
     data,
@@ -318,7 +325,8 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
     cardRadius,
     coverFileId,
     allowDownload,
-    allowLikes
+    allowLikes,
+    autoSync
   ]);
 
   const hasUnsavedChanges = useMemo(() => {
@@ -344,6 +352,8 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
       (coverFileId || '') !== (g.coverFileId || '') ||
       allowDownload !== g.allowDownload ||
       allowLikes !== g.allowLikes ||
+      autoSync !== (g.autoSync !== false) ||
+      driveSources.map((s) => s.trim()).filter(Boolean).join('|') !== savedDriveSources.join('|') ||
       Boolean(newPassword.trim()) ||
       clearPassword ||
       expiryAction !== ''
@@ -369,20 +379,36 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
     coverFileId,
     allowDownload,
     allowLikes,
+    autoSync,
+    driveSources,
+    savedDriveSources,
     newPassword,
     clearPassword,
     expiryAction
   ]);
 
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [hasUnsavedChanges]);
+
   const resetDraft = () => {
     if (!data) return;
     applyGalleryToForm(data.gallery);
+    setDriveSources(savedDriveSources);
   };
 
   const handleSave = async (e?: FormEvent) => {
     e?.preventDefault();
     setSaving(true);
     setError('');
+    const cleanedSources = driveSources.map((s) => s.trim()).filter(Boolean);
+    const sourcesChanged = cleanedSources.join('|') !== savedDriveSources.join('|');
     try {
       const res = await updateManageGallery(slug, {
         title,
@@ -404,6 +430,8 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
         coverFileId: coverFileId || undefined,
         allowDownload,
         allowLikes,
+        autoSync,
+        ...(sourcesChanged && cleanedSources.length > 0 ? { driveUrls: cleanedSources } : {}),
         ...(expiryAction === 'never'
           ? { expiresInDays: null }
           : expiryAction
@@ -415,9 +443,22 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
             ? { password: newPassword.trim() }
             : {})
       });
-      setData((prev) => (prev ? { ...prev, gallery: res.gallery } : prev));
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              gallery: res.gallery,
+              ...(res.items ? { items: res.items } : {}),
+              ...(res.folders ? { folders: res.folders } : {})
+            }
+          : prev
+      );
+      if (res.driveSources) {
+        setDriveSources(res.driveSources);
+        setSavedDriveSources(res.driveSources);
+      }
       applyGalleryToForm(res.gallery);
-      showToast('Gallery settings saved.');
+      showToast(sourcesChanged ? 'Saved & synced updated Drive folders.' : 'Gallery settings saved.');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to save changes.');
     } finally {
@@ -625,25 +666,19 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
 
   if (!data) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center bg-stone-50 px-4 text-center">
-        <p className="text-base font-medium text-red-700">{error || 'Unauthorized.'}</p>
-        <p className="mt-2 max-w-md text-xs text-slate-600">
-          API or hosting trouble? Contact{' '}
-          <a
-            href={buildSupportMailto(`Manage /g/${slug}`)}
-            className="font-semibold text-slate-900 underline underline-offset-2"
-          >
-            {SUPPORT_EMAIL}
-          </a>
-        </p>
-        <button
-          type="button"
-          onClick={() => onNavigate('/')}
-          className="mt-4 min-h-[40px] rounded-xl bg-slate-900 px-4 text-sm font-medium text-white"
-        >
-          Back Home
-        </button>
-      </main>
+      <StatusErrorPage
+        code="404"
+        variant="error"
+        title="Unable to Open Manage Page"
+        message={error || 'Unauthorized or gallery not found.'}
+        supportContext={`Manage /g/${slug}`}
+        onNavigateHome={() => onNavigate('/')}
+        primaryAction={{
+          label: 'Back Home',
+          onClick: () => onNavigate('/'),
+          icon: 'home'
+        }}
+      />
     );
   }
 
@@ -663,14 +698,45 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
             <img src="/logo.svg" alt="" className="hidden h-7 w-7 shrink-0 object-contain sm:block" />
             <div>
               <h1 className="text-lg font-bold">Manage: {data.gallery.title}</h1>
-              <p className="text-xs text-slate-500">
-                {data.gallery.itemCount} items · {data.gallery.viewCount} views · Last synced{' '}
-                {new Date(data.gallery.syncedAt).toLocaleString()}
-              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                <span>
+                  {data.gallery.itemCount} items · {data.gallery.viewCount} views · Synced{' '}
+                  {new Date(data.gallery.syncedAt).toLocaleDateString()}
+                </span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    data.gallery.hasPassword
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'bg-emerald-100 text-emerald-800'
+                  }`}
+                >
+                  {data.gallery.hasPassword ? 'Password Locked' : 'Public Link'}
+                </span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    data.gallery.allowDownload
+                      ? 'bg-stone-100 text-slate-700'
+                      : 'bg-rose-100 text-rose-800'
+                  }`}
+                >
+                  {data.gallery.allowDownload ? 'Downloads On' : 'View-Only'}
+                </span>
+              </div>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {hasUnsavedChanges && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void handleSave()}
+                className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-amber-500 px-3.5 text-xs font-semibold text-white shadow-xs transition hover:bg-amber-600 disabled:opacity-50"
+              >
+                <Save className="h-3.5 w-3.5" />
+                <span>{saving ? 'Saving...' : 'Save Changes'}</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={handleSync}
@@ -691,6 +757,14 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
             >
               {copiedShare ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               <span>{copiedShare ? 'Copied Share' : 'Copy Share Link'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setQrOpen(true)}
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-3.5 text-xs font-semibold hover:bg-stone-100"
+            >
+              <QrCode className="h-3.5 w-3.5" />
+              <span>QR &amp; Card</span>
             </button>
             {sessionManageToken && (
               <button
@@ -823,10 +897,27 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
               )}
             </div>
 
-            {/* Clean 3-Tab Switcher */}
+            {/* Clean 3-Tab Switcher with Arrow-Key Navigation */}
             <div
               role="tablist"
               aria-label="Gallery customization sections"
+              onKeyDown={(e) => {
+                const order = ['details', 'design', 'access'] as const;
+                const idx = order.indexOf(activeTab);
+                if (e.key === 'ArrowRight') {
+                  e.preventDefault();
+                  setActiveTab(order[(idx + 1) % order.length]);
+                } else if (e.key === 'ArrowLeft') {
+                  e.preventDefault();
+                  setActiveTab(order[(idx - 1 + order.length) % order.length]);
+                } else if (e.key === 'Home') {
+                  e.preventDefault();
+                  setActiveTab(order[0]);
+                } else if (e.key === 'End') {
+                  e.preventDefault();
+                  setActiveTab(order[order.length - 1]);
+                }
+              }}
               className="mt-4 grid grid-cols-3 gap-1 rounded-xl border border-stone-200 bg-stone-100 p-1"
             >
               {(
@@ -840,9 +931,12 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
                 return (
                   <button
                     key={tabId}
+                    id={`manage-tab-${tabId}`}
                     type="button"
                     role="tab"
+                    tabIndex={selected ? 0 : -1}
                     aria-selected={selected}
+                    aria-controls={`manage-panel-${tabId}`}
                     onClick={() => setActiveTab(tabId)}
                     className={`inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition ${
                       selected
@@ -929,28 +1023,102 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
                       />
                     </div>
                   </div>
+
+                  <div className="space-y-2.5 border-t border-stone-200/80 pt-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+                        Linked Drive Folders ({driveSources.length}/3)
+                      </p>
+                      {driveSources.length < 3 && (
+                        <button
+                          type="button"
+                          onClick={() => setDriveSources((prev) => [...prev, ''])}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700 hover:text-slate-950"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          <span>Add Link</span>
+                        </button>
+                      )}
+                    </div>
+                    {driveSources.map((src, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          required={idx === 0}
+                          aria-label={`Google Drive folder link ${idx + 1}`}
+                          value={src}
+                          onChange={(e) => {
+                            const next = [...driveSources];
+                            next[idx] = e.target.value;
+                            setDriveSources(next);
+                          }}
+                          placeholder="https://drive.google.com/drive/folders/..."
+                          className="uc-input flex-1 text-xs"
+                        />
+                        {driveSources.length > 1 && (
+                          <button
+                            type="button"
+                            aria-label={`Remove Drive link ${idx + 1}`}
+                            onClick={() =>
+                              setDriveSources((prev) => prev.filter((_, i) => i !== idx))
+                            }
+                            className="flex min-h-[40px] min-w-[40px] items-center justify-center rounded-xl border border-stone-300 text-slate-600 hover:bg-stone-100"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
               {activeTab === 'design' && (
                 <div className="space-y-4">
-                  <CustomSelect
-                    id="m-layout"
-                    label="Photo Layout"
-                    value={layout}
-                    options={LAYOUT_SELECT_OPTIONS}
-                    onChange={setLayout}
-                  />
+                  {/* Organized Design Sub-Navigation */}
+                  <div
+                    role="group"
+                    aria-label="Design categories"
+                    className="grid grid-cols-3 gap-1 rounded-lg border border-stone-200 bg-stone-50 p-1"
+                  >
+                    {(
+                      [
+                        ['layout', 'Layout & Hero'],
+                        ['colors', 'Colors'],
+                        ['framing', 'Frames & Type']
+                      ] as const
+                    ).map(([secId, label]) => {
+                      const active = designSection === secId;
+                      return (
+                        <button
+                          key={secId}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => setDesignSection(secId)}
+                          className={`min-h-[34px] rounded-md px-2 text-xs font-semibold transition ${
+                            active
+                              ? 'bg-slate-900 text-white shadow-2xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
 
-                  <CustomSelect
-                    id="m-theme"
-                    label="Gallery Color Theme"
-                    value={theme}
-                    options={THEME_SELECT_OPTIONS}
-                    onChange={setTheme}
-                  />
+                  {designSection === 'layout' && (
+                    <CustomSelect
+                      id="m-layout"
+                      label="Photo Layout"
+                      value={layout}
+                      options={LAYOUT_SELECT_OPTIONS}
+                      onChange={setLayout}
+                    />
+                  )}
 
                   <GalleryStyleControls
+                    section={designSection === 'layout' ? 'hero' : designSection}
                     values={{
                       theme,
                       fontPreset,
@@ -1009,6 +1177,12 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
                       description="Let visitors heart photos for Lightroom selection"
                       checked={allowLikes}
                       onChange={setAllowLikes}
+                    />
+                    <ToggleField
+                      label="Auto-sync Drive changes"
+                      description="Refresh newly added or removed Drive files in the background every 6 hours"
+                      checked={autoSync}
+                      onChange={setAutoSync}
                     />
                   </div>
 
@@ -1083,7 +1257,13 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-stone-200 pt-4">
+              <div
+                className={`flex flex-wrap items-center justify-end gap-2 pt-4 ${
+                  hasUnsavedChanges
+                    ? 'sticky bottom-3 z-20 rounded-xl border border-amber-200 bg-white/95 p-3 shadow-lg backdrop-blur-md'
+                    : 'border-t border-stone-200'
+                }`}
+              >
                 {hasUnsavedChanges && (
                   <button
                     type="button"
@@ -1139,7 +1319,9 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
                     [
                       ['masonry', LayoutGrid, 'Masonry'],
                       ['justified', Rows3, 'Justified'],
-                      ['grid', Square, 'Grid']
+                      ['grid', Square, 'Grid'],
+                      ['large', Maximize, 'Large'],
+                      ['editorial', Columns2, 'Editorial']
                     ] as const
                   ).map(([mode, Icon, label]) => (
                     <button
@@ -1147,15 +1329,15 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
                       type="button"
                       aria-label={`Preview ${label} layout`}
                       aria-pressed={layout === mode}
+                      title={`${label} layout`}
                       onClick={() => setLayout(mode)}
-                      className={`inline-flex min-h-[30px] items-center gap-1 rounded-md px-2 text-xs font-medium transition ${
+                      className={`inline-flex min-h-[30px] min-w-[30px] items-center justify-center rounded-md px-1.5 text-xs font-medium transition ${
                         layout === mode
                           ? 'bg-slate-900 text-white'
                           : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
                       <Icon className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">{label}</span>
                     </button>
                   ))}
                 </div>
@@ -1331,9 +1513,11 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
           ) : (
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-5">
               {likedItems.map((item) => (
-                <div
+                <button
                   key={item.id}
-                  className="group relative overflow-hidden rounded-xl border border-stone-200 bg-stone-100"
+                  type="button"
+                  onClick={() => onNavigate(`/g/${slug}/view/${item.id}`)}
+                  className="group relative overflow-hidden rounded-xl border border-stone-200 bg-stone-100 text-left transition hover:border-slate-400"
                 >
                   <div className="relative overflow-hidden">
                     <img
@@ -1352,44 +1536,34 @@ export function ManagePage({ slug, onNavigate }: ManagePageProps) {
                       )}
                     </div>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
         </section>
       </main>
 
-      <dialog
-        ref={deleteDialogRef}
-        onClose={() => setConfirmDeleteOpen(false)}
-        aria-labelledby="delete-dialog-title"
-        className="m-auto w-[min(92vw,26rem)] rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl"
-      >
-        <h2 id="delete-dialog-title" className="text-lg font-bold text-slate-900">
-          Delete this gallery?
-        </h2>
-        <p className="mt-2 text-sm text-slate-600">
-          This removes the gallery link and likes from {slug}. Your original files inside Google
-          Drive are never touched.
-        </p>
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => setConfirmDeleteOpen(false)}
-            className="min-h-[40px] rounded-xl border border-stone-300 px-4 text-sm font-medium"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={deleting}
-            onClick={handleDelete}
-            className="min-h-[40px] rounded-xl bg-red-600 px-4 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
-          >
-            {deleting ? 'Deleting...' : 'Delete Permanently'}
-          </button>
-        </div>
-      </dialog>
+      <ConfirmDeleteModal
+        open={confirmDeleteOpen}
+        itemName={title.trim() || data.gallery.title || slug}
+        description={`This permanently removes the gallery link and all likes from /g/${slug}. Your original files inside Google Drive are never touched.`}
+        warningText="Warning: This action cannot be undone."
+        confirmLabel="Delete Permanently"
+        busyLabel="Deleting..."
+        busy={deleting}
+        onCancel={() => setConfirmDeleteOpen(false)}
+        onConfirm={handleDelete}
+      />
+
+      <QrShareModal
+        open={qrOpen}
+        onClose={() => setQrOpen(false)}
+        shareUrl={`${window.location.origin}/g/${slug}`}
+        slug={slug}
+        title={title || data.gallery.title}
+        brandName={brandName}
+        hasPassword={data.gallery.hasPassword}
+      />
     </div>
   );
 }

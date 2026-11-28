@@ -1,4 +1,24 @@
 import { useEffect, useState } from 'react';
+import { canUsePreferenceStorage } from '../lib/cookieConsent';
+
+export const INTRO_SEEN_KEY = 'uc_intro_seen';
+
+export function hasSeenIntro(): boolean {
+  try {
+    return localStorage.getItem(INTRO_SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markIntroSeen(): void {
+  if (!canUsePreferenceStorage()) return;
+  try {
+    localStorage.setItem(INTRO_SEEN_KEY, '1');
+  } catch {
+    // Ignore storage quota / privacy mode errors
+  }
+}
 
 interface OpeningIntroProps {
   brandText?: string;
@@ -13,11 +33,12 @@ export function OpeningIntro({
   dark = false,
   onComplete
 }: OpeningIntroProps) {
-  const [phase, setPhase] = useState<IntroPhase>('typing');
+  const [phase, setPhase] = useState<IntroPhase>(() => (hasSeenIntro() ? 'done' : 'typing'));
   const [charCount, setCharCount] = useState(0);
 
   useEffect(() => {
     if (phase === 'done') {
+      markIntroSeen();
       onComplete();
       return;
     }
@@ -80,9 +101,7 @@ export function OpeningIntro({
             <img
               src="/logo.svg"
               alt=""
-              className={`mx-auto mb-4 h-14 w-14 object-contain sm:h-16 sm:w-16 ${
-                dark ? 'invert' : ''
-              }`}
+              className="mx-auto mb-4 h-14 w-14 object-contain sm:h-16 sm:w-16"
             />
             <p className="text-sm font-medium opacity-55">
               Zero-account gallery delivery

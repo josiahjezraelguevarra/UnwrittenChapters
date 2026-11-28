@@ -1,8 +1,8 @@
 export type GalleryFontPreset = 'sans' | 'serif' | 'mono' | 'fineart';
 export type GalleryGridGap = 'none' | 'compact' | 'normal' | 'airy';
 export type GalleryCardRadius = 'sharp' | 'rounded' | 'soft';
-export type GalleryHeroStyle = 'banner' | 'minimal' | 'split';
-export type GalleryCardStyle = 'clean' | 'framed' | 'mat';
+export type GalleryHeroStyle = 'fullscreen' | 'banner' | 'minimal' | 'split';
+export type GalleryCardStyle = 'clean' | 'framed' | 'mat' | 'polaroid' | 'shadow';
 export type GalleryCaptionMode = 'hover' | 'below' | 'hidden';
 
 export interface FontPresetMeta {
@@ -67,6 +67,7 @@ export const HERO_STYLE_META: Record<
   GalleryHeroStyle,
   { id: GalleryHeroStyle; label: string; tagline: string }
 > = {
+  fullscreen: { id: 'fullscreen', label: 'Full Screen', tagline: 'Whole-screen cover & center title' },
   banner: { id: 'banner', label: 'Cover Banner', tagline: 'Soft photo backdrop' },
   minimal: { id: 'minimal', label: 'Minimal Type', tagline: 'Pure color & ink' },
   split: { id: 'split', label: 'Split Frame', tagline: 'Side-by-side cover' }
@@ -78,7 +79,9 @@ export const CARD_STYLE_META: Record<
 > = {
   clean: { id: 'clean', label: 'Edge-to-Edge', tagline: 'Full bleed frames' },
   framed: { id: 'framed', label: 'Hairline', tagline: 'Subtle crisp border' },
-  mat: { id: 'mat', label: 'Gallery Mat', tagline: 'Museum print border' }
+  mat: { id: 'mat', label: 'Gallery Mat', tagline: 'Museum print border' },
+  polaroid: { id: 'polaroid', label: 'Polaroid', tagline: 'Classic film border' },
+  shadow: { id: 'shadow', label: 'Floating Print', tagline: 'Soft elevated frame' }
 };
 
 export const CAPTION_MODE_META: Record<
@@ -215,12 +218,14 @@ export function validateCardRadius(raw: unknown): GalleryCardRadius {
 }
 
 export function validateHeroStyle(raw: unknown): GalleryHeroStyle {
-  if (raw === 'minimal' || raw === 'split' || raw === 'banner') return raw;
-  return 'banner';
+  if (raw === 'fullscreen' || raw === 'minimal' || raw === 'split' || raw === 'banner') return raw;
+  return 'fullscreen';
 }
 
 export function validateCardStyle(raw: unknown): GalleryCardStyle {
-  if (raw === 'framed' || raw === 'mat' || raw === 'clean') return raw;
+  if (raw === 'framed' || raw === 'mat' || raw === 'polaroid' || raw === 'shadow' || raw === 'clean') {
+    return raw;
+  }
   return 'clean';
 }
 

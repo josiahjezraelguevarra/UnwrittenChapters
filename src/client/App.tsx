@@ -1,11 +1,26 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useState, type MouseEvent } from 'react';
+import { flushSync } from 'react-dom';
 import { FEEDBACK_FORM_URL, REPORT_FORM_URL } from '../shared/contact';
 import type { AppPublicConfig } from '../shared/types';
+import { CookieConsentBanner } from './components/CookieConsentBanner';
 import { DonateModal } from './components/DonateModal';
+import { StatusErrorPage } from './components/StatusErrorPage';
 import { fetchAppConfig } from './lib/api';
+import {
+  canUsePreferenceStorage,
+  loadCookieConsent,
+  saveCookieConsent,
+  type CookieConsentChoice
+} from './lib/cookieConsent';
 import { GalleryPage } from './pages/GalleryPage';
 import { HomePage } from './pages/HomePage';
+import { LegalPage } from './pages/LegalPage';
 import { ManagePage } from './pages/ManagePage';
+import { MediaViewPage } from './pages/MediaViewPage';
+
+const ToolsPage = lazy(() =>
+  import('./pages/ToolsPage').then((m) => ({ default: m.ToolsPage }))
+);
 
 const DEFAULT_CONFIG: AppPublicConfig = {
   appName: 'UnwrittenChapters',
@@ -31,17 +46,84 @@ export function App() {
   const [config, setConfig] = useState<AppPublicConfig>(DEFAULT_CONFIG);
   const [donateOpen, setDonateOpen] = useState(false);
   const [homeTheme, setHomeTheme] = useState<'light' | 'dark'>(loadInitialHomeTheme);
+  const [cookieConsent, setCookieConsent] = useState<CookieConsentChoice | null>(() =>
+    loadCookieConsent()
+  );
+  const [cookieBannerOpen, setCookieBannerOpen] = useState(() => loadCookieConsent() === null);
 
-  const toggleHomeTheme = useCallback(() => {
-    setHomeTheme((prev) => {
-      const next = prev === 'dark' ? 'light' : 'dark';
-      try {
-        localStorage.setItem(HOME_THEME_KEY, next);
-      } catch {
-        // Ignore storage errors
-      }
-      return next;
+  const toggleHomeTheme = useCallback((event?: MouseEvent<HTMLElement>) => {
+    const commitThemeToggle = () => {
+      setHomeTheme((prev) => {
+        const next = prev === 'dark' ? 'light' : 'dark';
+        if (canUsePreferenceStorage()) {
+          try {
+            localStorage.setItem(HOME_THEME_KEY, next);
+          } catch {
+            // Ignore storage errors
+          }
+        }
+        return next;
+      });
+    };
+
+    const reduceMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+    const docWithTransition = document as unknown as {
+      startViewTransition?: (cb: () => void) => {
+        ready: Promise<void>;
+        finished: Promise<void>;
+      };
+    };
+
+    if (reduceMotion || typeof docWithTransition.startViewTransition !== 'function') {
+      commitThemeToggle();
+      return;
+    }
+
+    const rect = event?.currentTarget?.getBoundingClientRect();
+    const x = rect ? rect.left + rect.width / 2 : window.innerWidth - 48;
+    const y = rect ? rect.top + rect.height / 2 : 32;
+    const endRadius = Math.hypot(
+      Math.max(x, window.innerWidth - x),
+      Math.max(y, window.innerHeight - y)
+    );
+
+    const rootEl = document.documentElement;
+    rootEl.classList.add('uc-theme-transition');
+
+    const transition = docWithTransition.startViewTransition(() => {
+      flushSync(commitThemeToggle);
     });
+
+    transition.ready
+      .then(() => {
+        document.documentElement.animate(
+          {
+            clipPath: [
+              `circle(0px at ${x}px ${y}px)`,
+              `circle(${endRadius}px at ${x}px ${y}px)`
+            ]
+          },
+          {
+            duration: 540,
+            easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+            pseudoElement: '::view-transition-new(root)'
+          }
+        );
+      })
+      .catch(() => {
+        // Ignore cancelled transitions on rapid toggles
+      });
+
+    transition.finished
+      .catch(() => {
+        // Ignore cancelled transitions on rapid toggles
+      })
+      .finally(() => {
+        rootEl.classList.remove('uc-theme-transition');
+      });
   }, []);
 
   useEffect(() => {
@@ -66,12 +148,40 @@ export function App() {
   }, []);
 
   const manageMatch = pathname.match(/^\/g\/([a-zA-Z0-9_-]+)\/manage\/?$/);
+  const mediaViewMatch = pathname.match(/^\/g\/([a-zA-Z0-9_-]+)\/view\/([a-zA-Z0-9_-]+)\/?$/);
   const galleryMatch = pathname.match(/^\/g\/([a-zA-Z0-9_-]+)\/?$/);
+  const isToolsRoute = pathname === '/tools' || pathname === '/tools/';
+  const isPrivacyRoute = pathname === '/privacy' || pathname === '/privacy/';
+  const isTermsRoute = pathname === '/terms' || pathname === '/terms/';
+  const isExactHome = pathname === '/' || pathname === '';
+  const isUnknownRoute =
+    !isExactHome &&
+    !manageMatch &&
+    !mediaViewMatch &&
+    !galleryMatch &&
+    !isToolsRoute &&
+    !isPrivacyRoute &&
+    !isTermsRoute;
+  const isHomeRoute = isExactHome;
+  const isHomeDark =
+    (isHomeRoute || isPrivacyRoute || isTermsRoute || isUnknownRoute) && homeTheme === 'dark';
+
+  useEffect(() => {
+    if (!isUnknownRoute) return;
+    document.title = `404 Page Not Found — ${config.appName}`;
+  }, [isUnknownRoute, config.appName]);
 
   return (
     <>
       {manageMatch ? (
         <ManagePage slug={manageMatch[1]} onNavigate={navigate} />
+      ) : mediaViewMatch ? (
+        <MediaViewPage
+          slug={mediaViewMatch[1]}
+          fileId={mediaViewMatch[2]}
+          config={config}
+          onNavigate={navigate}
+        />
       ) : galleryMatch ? (
         <GalleryPage
           slug={galleryMatch[1]}
@@ -79,12 +189,51 @@ export function App() {
           onOpenDonate={() => setDonateOpen(true)}
           onNavigate={navigate}
         />
+      ) : isToolsRoute ? (
+        <Suspense
+          fallback={
+            <div className="flex min-h-screen items-center justify-center bg-[#f8f6f2] text-sm text-slate-600">
+              Loading photo tools...
+            </div>
+          }
+        >
+          <ToolsPage config={config} onNavigate={navigate} />
+        </Suspense>
+      ) : isPrivacyRoute || isTermsRoute ? (
+        <LegalPage
+          kind={isPrivacyRoute ? 'privacy' : 'terms'}
+          config={config}
+          dark={homeTheme === 'dark'}
+          onNavigate={navigate}
+          onOpenCookieSettings={() => setCookieBannerOpen(true)}
+        />
+      ) : isUnknownRoute ? (
+        <StatusErrorPage
+          code="404"
+          variant="not-found"
+          title="Page Not Found"
+          message={`We couldn't find "${pathname}". The link may be mistyped or the page no longer exists.`}
+          appName={config.appName}
+          dark={homeTheme === 'dark'}
+          onNavigateHome={() => navigate('/')}
+          primaryAction={{
+            label: 'Back to Home',
+            onClick: () => navigate('/'),
+            icon: 'home'
+          }}
+          secondaryAction={{
+            label: 'Photo Tools',
+            onClick: () => navigate('/tools'),
+            icon: 'tools'
+          }}
+        />
       ) : (
         <HomePage
           config={config}
           homeTheme={homeTheme}
           onToggleHomeTheme={toggleHomeTheme}
           onOpenDonate={() => setDonateOpen(true)}
+          onOpenCookieSettings={() => setCookieBannerOpen(true)}
           onNavigate={navigate}
         />
       )}
@@ -94,7 +243,21 @@ export function App() {
         onClose={() => setDonateOpen(false)}
         appName={config.appName}
         donateUrl={config.donateUrl}
-        dark={!manageMatch && !galleryMatch && homeTheme === 'dark'}
+        dark={isHomeDark}
+      />
+
+      <CookieConsentBanner
+        open={cookieBannerOpen}
+        initialPreferences={cookieConsent?.preferences ?? true}
+        canDismiss={cookieConsent !== null}
+        hasBottomTicker={isHomeRoute || Boolean(galleryMatch)}
+        onNavigate={navigate}
+        onSaveConsent={(preferences) => {
+          const saved = saveCookieConsent(preferences);
+          setCookieConsent(saved);
+          setCookieBannerOpen(false);
+        }}
+        onDismiss={() => setCookieBannerOpen(false)}
       />
     </>
   );

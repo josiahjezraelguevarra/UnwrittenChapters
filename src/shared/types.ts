@@ -15,7 +15,7 @@ export type {
   GalleryGridGap,
   GalleryHeroStyle
 };
-export type GalleryLayout = 'masonry' | 'grid' | 'justified';
+export type GalleryLayout = 'masonry' | 'grid' | 'justified' | 'large' | 'editorial';
 export type GalleryTheme = 'light' | 'dark';
 export type MediaKind = 'image' | 'video';
 
@@ -63,9 +63,11 @@ export interface PublicGalleryConfig {
   brandUrl: string;
   allowDownload: boolean;
   allowLikes: boolean;
+  autoSync: boolean;
   hasPassword: boolean;
   expiresAt: number | null;
   itemCount: number;
+  sourceCount?: number;
   viewCount: number;
   syncedAt: number;
   createdAt: number;

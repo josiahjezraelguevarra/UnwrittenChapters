@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 export interface PageSeoOptions {
   title: string;
   description?: string;
+  ogDescription?: string;
   robots?: string;
   canonicalPath?: string | null;
 }
@@ -23,6 +24,7 @@ function upsertMeta(key: string, content: string, attr: 'name' | 'property' = 'n
 export function usePageSeo({
   title,
   description,
+  ogDescription,
   robots = 'index, follow, max-image-preview:large, max-snippet:-1',
   canonicalPath
 }: PageSeoOptions) {
@@ -34,8 +36,12 @@ export function usePageSeo({
 
     if (description) {
       upsertMeta('description', description);
-      upsertMeta('og:description', description, 'property');
-      upsertMeta('twitter:description', description);
+    }
+
+    const socialDesc = ogDescription ?? description;
+    if (socialDesc) {
+      upsertMeta('og:description', socialDesc, 'property');
+      upsertMeta('twitter:description', socialDesc);
     }
 
     let canonicalEl = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
@@ -51,5 +57,5 @@ export function usePageSeo({
       canonicalEl.setAttribute('href', canonicalUrl);
       upsertMeta('og:url', canonicalUrl, 'property');
     }
-  }, [title, description, robots, canonicalPath]);
+  }, [title, description, ogDescription, robots, canonicalPath]);
 }

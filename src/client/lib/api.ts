@@ -14,6 +14,7 @@ import type {
   PublicGalleryConfig,
   RecentGalleryEntry
 } from '../../shared/types';
+import { canUsePreferenceStorage } from './cookieConsent';
 
 const VISITOR_KEY = 'uc_visitor_id';
 const RECENT_KEY = 'uc_recent_galleries';
@@ -48,7 +49,9 @@ export function getOrCreateVisitorId(): string {
       return existing;
     }
     const generated = crypto.randomUUID().replace(/-/g, '');
-    localStorage.setItem(VISITOR_KEY, generated);
+    if (canUsePreferenceStorage()) {
+      localStorage.setItem(VISITOR_KEY, generated);
+    }
     return generated;
   } catch {
     return 'anonymous_visitor';
@@ -71,6 +74,7 @@ export function getRecentGalleries(): RecentGalleryEntry[] {
 }
 
 export function saveRecentGallery(entry: RecentGalleryEntry): void {
+  if (!canUsePreferenceStorage()) return;
   try {
     // Never persist secret #manageToken fragments in localStorage
     const sanitizedEntry: RecentGalleryEntry = {
@@ -100,7 +104,8 @@ export async function fetchAppConfig(): Promise<AppPublicConfig> {
 }
 
 export interface CreateGalleryPayload {
-  driveUrl: string;
+  driveUrl?: string;
+  driveUrls?: string[];
   title?: string;
   description?: string;
   brandName?: string;
@@ -121,6 +126,7 @@ export interface CreateGalleryPayload {
   expiresInDays?: number | null;
   allowDownload?: boolean;
   allowLikes?: boolean;
+  autoSync?: boolean;
   customSlug?: string;
   turnstileToken?: string;
 }
@@ -177,6 +183,7 @@ export async function toggleLike(
 export interface ManageGalleryResponse {
   gallery: PublicGalleryConfig;
   driveFolderId: string;
+  driveSources?: string[];
   items: MediaItem[];
   folders: GalleryFolder[];
   likeCounts: Record<string, number>;
@@ -217,7 +224,12 @@ export async function updateManageGallery(
   slug: string,
   patch: Record<string, unknown>,
   adminToken?: string
-): Promise<{ gallery: PublicGalleryConfig }> {
+): Promise<{
+  gallery: PublicGalleryConfig;
+  items?: MediaItem[];
+  folders?: GalleryFolder[];
+  driveSources?: string[];
+}> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (adminToken) headers.Authorization = `Bearer ${adminToken}`;
   const res = await fetch(`/api/galleries/${encodeURIComponent(slug)}/manage`, {
@@ -226,7 +238,7 @@ export async function updateManageGallery(
     headers,
     body: JSON.stringify(patch)
   });
-  return parseJson<{ gallery: PublicGalleryConfig }>(res);
+  return parseJson(res);
 }
 
 export async function syncGalleryDrive(
@@ -279,11 +291,15 @@ export interface BibleVerseResponse {
   reference: string;
   text: string;
   translation: 'ESV';
-  source?: 'api' | 'fallback';
+  source?: 'curated' | 'api' | 'fallback';
 }
 
-export async function fetchRandomBibleVerse(signal?: AbortSignal): Promise<BibleVerseResponse> {
-  const res = await fetch('/api/bible/random', { signal, cache: 'no-store' });
+export async function fetchRandomBibleVerse(
+  signal?: AbortSignal,
+  excludeRef?: string
+): Promise<BibleVerseResponse> {
+  const qs = excludeRef ? `?exclude=${encodeURIComponent(excludeRef)}` : '';
+  const res = await fetch(`/api/bible/random${qs}`, { signal, cache: 'no-store' });
   return parseJson<BibleVerseResponse>(res);
 }
 

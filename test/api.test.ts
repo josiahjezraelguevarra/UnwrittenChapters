@@ -87,39 +87,41 @@ function createMemoryDB() {
               id: args[0] as string,
               slug: args[1] as string,
               drive_folder_id: args[2] as string,
-              title: args[3] as string,
-              description: args[4] as string,
-              cover_file_id: args[5] as string | null,
-              layout: args[6] as GalleryRow['layout'],
-              theme: args[7] as GalleryRow['theme'],
-              font_preset: args[8] as GalleryRow['font_preset'],
-              accent_color: args[9] as string,
-              background_color: args[10] as string,
-              surface_color: args[11] as string,
-              text_color: args[12] as string,
-              hero_style: args[13] as GalleryRow['hero_style'],
-              card_style: args[14] as GalleryRow['card_style'],
-              caption_mode: args[15] as GalleryRow['caption_mode'],
-              grid_gap: args[16] as GalleryRow['grid_gap'],
-              card_radius: args[17] as GalleryRow['card_radius'],
-              brand_name: args[18] as string,
-              brand_url: args[19] as string,
-              password_hash: args[20] as string | null,
-              admin_token_hash: args[21] as string,
-              allow_download: args[22] as number,
-              allow_likes: args[23] as number,
-              expires_at: args[24] as number | null,
-              status: args[25] as string,
-              items_json: args[26] as string,
-              folders_json: args[27] as string,
-              item_count: args[28] as number,
-              view_count: args[29] as number,
-              synced_at: args[30] as number,
-              created_at: args[31] as number
+              drive_sources_json: args[3] as string,
+              title: args[4] as string,
+              description: args[5] as string,
+              cover_file_id: args[6] as string | null,
+              layout: args[7] as GalleryRow['layout'],
+              theme: args[8] as GalleryRow['theme'],
+              font_preset: args[9] as GalleryRow['font_preset'],
+              accent_color: args[10] as string,
+              background_color: args[11] as string,
+              surface_color: args[12] as string,
+              text_color: args[13] as string,
+              hero_style: args[14] as GalleryRow['hero_style'],
+              card_style: args[15] as GalleryRow['card_style'],
+              caption_mode: args[16] as GalleryRow['caption_mode'],
+              grid_gap: args[17] as GalleryRow['grid_gap'],
+              card_radius: args[18] as GalleryRow['card_radius'],
+              brand_name: args[19] as string,
+              brand_url: args[20] as string,
+              password_hash: args[21] as string | null,
+              admin_token_hash: args[22] as string,
+              allow_download: args[23] as number,
+              allow_likes: args[24] as number,
+              auto_sync: args[25] as number,
+              expires_at: args[26] as number | null,
+              status: args[27] as string,
+              items_json: args[28] as string,
+              folders_json: args[29] as string,
+              item_count: args[30] as number,
+              view_count: args[31] as number,
+              synced_at: args[32] as number,
+              created_at: args[33] as number
             };
             galleries.set(row.id, row);
           } else if (sql.startsWith('UPDATE galleries SET') && sql.includes('font_preset')) {
-            const id = args[21] as string;
+            const id = args[24] as string;
             const existing = galleries.get(id);
             if (existing) {
               existing.title = args[0] as string;
@@ -141,8 +143,20 @@ function createMemoryDB() {
               existing.cover_file_id = args[16] as string | null;
               existing.allow_download = args[17] as number;
               existing.allow_likes = args[18] as number;
-              existing.password_hash = args[19] as string | null;
-              existing.expires_at = args[20] as number | null;
+              existing.auto_sync = args[19] as number;
+              existing.password_hash = args[20] as string | null;
+              existing.expires_at = args[21] as number | null;
+              existing.drive_folder_id = args[22] as string;
+              existing.drive_sources_json = args[23] as string;
+            }
+          } else if (sql.startsWith('UPDATE galleries SET') && sql.includes('items_json')) {
+            const existing = galleries.get(args[5] as string);
+            if (existing) {
+              existing.items_json = args[0] as string;
+              existing.folders_json = args[1] as string;
+              existing.item_count = args[2] as number;
+              existing.cover_file_id = args[3] as string | null;
+              existing.synced_at = args[4] as number;
             }
           } else if (sql.startsWith('UPDATE galleries SET admin_token_hash')) {
             const existing = galleries.get(args[1] as string);
@@ -581,36 +595,33 @@ describe('Gallery API & Media Proxy security', () => {
     expect(noGapBody.gallery.gridGap).toBe('none');
   });
 
-  it('serves sanitized ESV Bible verses from public API with safe fallback', async () => {
+  it('serves curated popular ESV Bible verses locally with zero external fetches', async () => {
+    const fetchSpy = vi.fn();
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
     const res = await app.request('/api/bible/random', undefined, env);
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(fetchSpy).not.toHaveBeenCalled();
     const body = (await res.json()) as {
       reference: string;
       text: string;
       translation: string;
       source: string;
     };
-    expect(body).toEqual({
-      reference: 'John 3:16',
-      text: 'For God so loved the world & gave his only Son.',
-      translation: 'ESV',
-      source: 'api'
-    });
+    expect(body.translation).toBe('ESV');
+    expect(body.source).toBe('curated');
+    expect(body.reference.length).toBeGreaterThan(2);
+    expect(body.text.length).toBeGreaterThan(10);
 
-    globalThis.fetch = vi.fn(async () => new Response('Unavailable', { status: 503 })) as unknown as typeof fetch;
-    const fallbackRes = await app.request('/api/bible/random', undefined, env);
-    expect(fallbackRes.status).toBe(200);
-    const fallbackBody = (await fallbackRes.json()) as {
-      reference: string;
-      text: string;
-      translation: string;
-      source: string;
-    };
-    expect(fallbackBody.translation).toBe('ESV');
-    expect(fallbackBody.source).toBe('fallback');
-    expect(fallbackBody.reference.length).toBeGreaterThan(2);
-    expect(fallbackBody.text.length).toBeGreaterThan(10);
+    const nextRes = await app.request(
+      `/api/bible/random?exclude=${encodeURIComponent(body.reference)}`,
+      undefined,
+      env
+    );
+    expect(nextRes.status).toBe(200);
+    const nextBody = (await nextRes.json()) as { reference: string };
+    expect(nextBody.reference).not.toBe(body.reference);
   });
 
   it('enforces HttpOnly admin cookies, token rotation, CSRF origin checks, password policy, and strict inputs', async () => {
@@ -757,5 +768,224 @@ describe('Gallery API & Media Proxy security', () => {
       env
     );
     expect(badParamRes.status).toBe(400);
+  });
+
+  it('triggers background auto-sync on stale cache with KV lock and respects autoSync toggle', async () => {
+    const createRes = await app.request(
+      '/api/galleries',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driveUrl: 'https://drive.google.com/drive/folders/folderABC12345'
+        })
+      },
+      env
+    );
+    expect(createRes.status).toBe(201);
+    const created = (await createRes.json()) as {
+      slug: string;
+      gallery: { autoSync: boolean; syncedAt: number };
+    };
+    expect(created.gallery.autoSync).toBe(true);
+    const adminCookie = (createRes.headers.get('set-cookie') || '').split(';')[0];
+
+    // Seed Drive mock to return 2 files on subsequent sync, and make gallery appear stale (> 6h)
+    let driveListCalls = 0;
+    const baseFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = decodeURIComponent(typeof input === 'string' ? input : input.toString());
+      if (url.includes("'folderABC12345'+in+parents")) {
+        driveListCalls += 1;
+        return new Response(
+          JSON.stringify({
+            files: [
+              {
+                id: 'imgFile00001',
+                name: 'portrait.jpg',
+                mimeType: 'image/jpeg',
+                size: '102400',
+                imageMediaMetadata: { width: 1600, height: 2400 }
+              },
+              {
+                id: 'imgFile00002',
+                name: 'new-shot.jpg',
+                mimeType: 'image/jpeg',
+                size: '204800',
+                imageMediaMetadata: { width: 1600, height: 1200 }
+              }
+            ]
+          }),
+          { status: 200 }
+        );
+      }
+      return baseFetch(input, init);
+    }) as typeof fetch;
+
+    const row = await env.DB.prepare('SELECT * FROM galleries WHERE slug = ?1 LIMIT 1')
+      .bind(created.slug)
+      .first<GalleryRow>();
+    expect(row).not.toBeNull();
+    row!.synced_at = Date.now() - 7 * 60 * 60 * 1000;
+
+    const pending: Promise<unknown>[] = [];
+    const execCtx = { waitUntil: (p: Promise<unknown>) => pending.push(p) } as unknown as ExecutionContext;
+
+    const viewRes = await app.fetch(
+      new Request(`http://localhost/api/galleries/${created.slug}`),
+      env,
+      execCtx
+    );
+    expect(viewRes.status).toBe(200);
+    await Promise.all(pending);
+    expect(driveListCalls).toBe(1);
+    expect(await env.CACHE.get(`autosync:${created.slug}`)).toBe('1');
+
+    // Second stale view while KV lock is active does not re-trigger Drive sync
+    row!.synced_at = Date.now() - 7 * 60 * 60 * 1000;
+    const pending2: Promise<unknown>[] = [];
+    await app.fetch(
+      new Request(`http://localhost/api/galleries/${created.slug}`),
+      env,
+      { waitUntil: (p: Promise<unknown>) => pending2.push(p) } as unknown as ExecutionContext
+    );
+    await Promise.all(pending2);
+    expect(driveListCalls).toBe(1);
+
+    // Disable autoSync via Manage PATCH and confirm toggle persists
+    const patchRes = await app.request(
+      `/api/galleries/${created.slug}/manage`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Cookie: adminCookie },
+        body: JSON.stringify({ autoSync: false })
+      },
+      env
+    );
+    expect(patchRes.status).toBe(200);
+    const patched = (await patchRes.json()) as { gallery: { autoSync: boolean } };
+    expect(patched.gallery.autoSync).toBe(false);
+  });
+
+  it('includes /tools in sitemap.xml for organic discovery', async () => {
+    const res = await app.request('/sitemap.xml', {}, env);
+    expect(res.status).toBe(200);
+    const xml = await res.text();
+    expect(xml).toContain('/tools');
+  });
+
+  it('rejects more than 3 Drive links on gallery creation and defaults heroStyle to fullscreen', async () => {
+    const tooManyRes = await app.request(
+      '/api/galleries',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driveUrls: [
+            'https://drive.google.com/drive/folders/folderOne1234',
+            'https://drive.google.com/drive/folders/folderTwo1234',
+            'https://drive.google.com/drive/folders/folderThree34',
+            'https://drive.google.com/drive/folders/folderFour123'
+          ]
+        })
+      },
+      env
+    );
+    expect(tooManyRes.status).toBe(400);
+    const tooManyBody = (await tooManyRes.json()) as { code?: string };
+    expect(tooManyBody.code).toBe('TOO_MANY_DRIVE_SOURCES');
+
+    const okRes = await app.request(
+      '/api/galleries',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driveUrl: 'https://drive.google.com/drive/folders/folderABC12345',
+          allowDownload: false
+        })
+      },
+      env
+    );
+    expect(okRes.status).toBe(201);
+    const okBody = (await okRes.json()) as {
+      gallery: { heroStyle: string; allowDownload: boolean; sourceCount: number };
+    };
+    expect(okBody.gallery.heroStyle).toBe('fullscreen');
+    expect(okBody.gallery.allowDownload).toBe(false);
+    expect(okBody.gallery.sourceCount).toBe(1);
+  });
+
+  it('performs zero KV writes on view/like/media and survives KV write quota exhaustion', async () => {
+    const createRes = await app.request(
+      '/api/galleries',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driveUrl: 'https://drive.google.com/drive/folders/folderABC12345'
+        })
+      },
+      env
+    );
+    expect(createRes.status).toBe(201);
+    const created = (await createRes.json()) as { slug: string };
+
+    const putSpy = vi.spyOn(env.CACHE, 'put');
+
+    const viewRes = await app.request(`/api/galleries/${created.slug}`, {}, env);
+    expect(viewRes.status).toBe(200);
+    const viewBody = (await viewRes.json()) as { items: Array<{ id: string }> };
+    const itemId = viewBody.items[0].id;
+
+    const likeRes = await app.request(
+      `/api/galleries/${created.slug}/likes`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId: itemId, visitorId: 'visitor_12345678' })
+      },
+      env
+    );
+    expect(likeRes.status).toBe(200);
+
+    const mediaRes = await app.request(
+      `/api/media/${created.slug}/${itemId}?variant=thumb&w=800`,
+      {},
+      env
+    );
+    expect(mediaRes.status).toBe(200);
+
+    // Zero KV writes for high-volume view, like, and media requests
+    expect(putSpy).not.toHaveBeenCalled();
+
+    // Simulate Cloudflare KV daily write quota exhaustion on low-volume create/unlock
+    putSpy.mockRejectedValue(new Error('KV put() limit exceeded for the day'));
+
+    const resilientCreate = await app.request(
+      '/api/galleries',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driveUrl: 'https://drive.google.com/drive/folders/folderABC12345',
+          password: 'secret-password'
+        })
+      },
+      env
+    );
+    expect(resilientCreate.status).toBe(201);
+    const created2 = (await resilientCreate.json()) as { slug: string };
+
+    const resilientUnlock = await app.request(
+      `/api/galleries/${created2.slug}/unlock`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'secret-password' })
+      },
+      env
+    );
+    expect(resilientUnlock.status).toBe(200);
   });
 });
