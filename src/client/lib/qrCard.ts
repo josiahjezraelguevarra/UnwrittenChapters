@@ -195,10 +195,6 @@ export async function renderShareCardPngDataUrl(options: QrCardOptions): Promise
     ctx.fillText(hintText.slice(0, 48), width / 2, pillY + 18);
   }
 
-  ctx.fillStyle = muted;
-  ctx.font = '500 22px "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif';
-  ctx.fillText('4 × 6 Print Card', width / 2, 1650);
-
   return canvas.toDataURL('image/png');
 }
 

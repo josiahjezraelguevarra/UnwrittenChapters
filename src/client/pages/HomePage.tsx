@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type MouseEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react';
 import {
   AlertCircle,
   ArrowDownRight,
@@ -12,6 +12,7 @@ import {
   Heart,
   KeyRound,
   Link2,
+  Menu,
   Moon,
   Palette,
   RefreshCw,
@@ -19,7 +20,8 @@ import {
   Sparkles,
   Sun,
   Trash2,
-  Wand2
+  Wand2,
+  X
 } from 'lucide-react';
 import type {
   AppPublicConfig,
@@ -163,6 +165,9 @@ export function HomePage({
   const handleIntroComplete = useCallback(() => setIntroDone(true), []);
 
   const driveInputRef = useRef<HTMLInputElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [recent, setRecent] = useState<RecentGalleryEntry[]>(() => getRecentGalleries());
 
   const scrollToSection = (id: string, focusInput = false) => {
@@ -175,15 +180,84 @@ export function HomePage({
     }
   };
 
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMobileMenuOpen(false);
+        menuButtonRef.current?.focus();
+      }
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (headerRef.current && !headerRef.current.contains(event.target as Node)) {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    const mediaQuery = window.matchMedia('(min-width: 768px)');
+    const handleMediaChange = (event: MediaQueryListEvent) => {
+      if (event.matches) setMobileMenuOpen(false);
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('pointerdown', handlePointerDown);
+    mediaQuery.addEventListener('change', handleMediaChange);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('pointerdown', handlePointerDown);
+      mediaQuery.removeEventListener('change', handleMediaChange);
+    };
+  }, [mobileMenuOpen]);
+
   const borderRule = isDark ? 'border-[#f4f1ea]/12' : 'border-[#141311]/12';
   const dividerRule = isDark ? 'divide-[#f4f1ea]/12 border-[#f4f1ea]/12' : 'divide-[#141311]/12 border-[#141311]/12';
   const mutedText = isDark ? 'text-[#f4f1ea]/55' : 'text-[#141311]/55';
   const bodyText = isDark ? 'text-[#f4f1ea]/75' : 'text-[#141311]/72';
-  const navLinkClass = `inline-flex min-h-[40px] items-center rounded-full px-3 text-xs font-medium transition sm:text-sm ${
+  const navLinkClass = `inline-flex min-h-[40px] items-center rounded-full px-3 text-sm font-medium transition ${
     isDark
       ? 'text-[#f4f1ea]/75 hover:bg-[#f4f1ea]/10 hover:text-[#f4f1ea]'
       : 'text-[#141311]/75 hover:bg-[#141311]/5 hover:text-[#141311]'
   }`;
+  const mobileNavLinkClass = `flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3.5 text-sm font-medium transition ${
+    isDark
+      ? 'text-[#f4f1ea]/85 hover:bg-[#f4f1ea]/10 hover:text-[#f4f1ea]'
+      : 'text-[#141311]/85 hover:bg-[#141311]/5 hover:text-[#141311]'
+  }`;
+  const iconButtonClass = `flex min-h-[40px] min-w-[40px] items-center justify-center rounded-full border transition active:scale-95 ${
+    isDark
+      ? 'border-[#f4f1ea]/20 text-[#f4f1ea] hover:bg-[#f4f1ea]/10'
+      : 'border-[#141311]/15 text-[#141311] hover:bg-[#141311]/5'
+  }`;
+  const navItems: Array<{
+    label: string;
+    href: string;
+    icon?: typeof Heart;
+    onSelect: () => void;
+  }> = [
+    {
+      label: 'About',
+      href: '#about',
+      onSelect: () => scrollToSection('about')
+    },
+    {
+      label: 'How It Works',
+      href: '#how-it-works',
+      onSelect: () => scrollToSection('how-it-works')
+    },
+    {
+      label: 'Photo Tools',
+      href: '/tools',
+      onSelect: () => onNavigate('/tools')
+    },
+    {
+      label: 'Donate',
+      href: '#donate',
+      icon: Heart,
+      onSelect: () => scrollToSection('donate')
+    }
+  ];
   const builderDark = !isDark;
   const builderMutedText = builderDark ? 'text-[#f4f1ea]/55' : 'text-[#141311]/55';
 
@@ -200,94 +274,73 @@ export function HomePage({
       >
         {/* Editorial Navigation */}
         <header
+          ref={headerRef}
           className={`sticky top-0 z-30 border-b backdrop-blur-md transition-colors ${
             isDark
               ? 'border-[#f4f1ea]/12 bg-[#12110f]/92'
               : 'border-[#141311]/12 bg-[#f8f6f2]/92'
           }`}
         >
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-6">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3.5 sm:gap-3 sm:px-6">
             <a
               href="#top"
               onClick={(e) => {
                 e.preventDefault();
+                setMobileMenuOpen(false);
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="flex items-center gap-2.5 focus-visible:outline-2 focus-visible:outline-offset-2"
+              className="flex min-w-0 items-center gap-2 sm:gap-2.5 focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               <img
                 src="/logo.svg"
                 alt=""
-                className={`h-8 w-8 shrink-0 object-contain sm:h-9 sm:w-9 ${
+                className={`h-7 w-7 shrink-0 object-contain sm:h-9 sm:w-9 ${
                   isDark ? 'invert' : ''
                 }`}
               />
-              <span className="uc-font-serif text-lg font-semibold tracking-tight sm:text-xl">
+              <span className="uc-font-serif truncate text-base font-semibold tracking-tight sm:text-xl">
                 {config.appName}
               </span>
             </a>
 
-            <nav aria-label="Primary navigation" className="flex flex-wrap items-center gap-1 sm:gap-1.5">
-              <a
-                href="#about"
-                onClick={(e) => {
-                  e.preventDefault();
-                  scrollToSection('about');
-                }}
-                className={navLinkClass}
-              >
-                About
-              </a>
-              <a
-                href="#how-it-works"
-                onClick={(e) => {
-                  e.preventDefault();
-                  scrollToSection('how-it-works');
-                }}
-                className={navLinkClass}
-              >
-                How It Works
-              </a>
-              <a
-                href="/tools"
-                onClick={(e) => {
-                  e.preventDefault();
-                  onNavigate('/tools');
-                }}
-                className={navLinkClass}
-              >
-                Photo Tools
-              </a>
-              <a
-                href="#donate"
-                onClick={(e) => {
-                  e.preventDefault();
-                  scrollToSection('donate');
-                }}
-                className={`${navLinkClass} gap-1.5`}
-              >
-                <Heart className="h-3.5 w-3.5" />
-                <span>Donate</span>
-              </a>
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+              <nav aria-label="Primary navigation" className="hidden items-center gap-1 md:flex">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <a
+                      key={item.label}
+                      href={item.href}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        item.onSelect();
+                      }}
+                      className={`${navLinkClass} ${Icon ? 'gap-1.5' : ''}`}
+                    >
+                      {Icon && <Icon className="h-3.5 w-3.5" />}
+                      <span>{item.label}</span>
+                    </a>
+                  );
+                })}
+              </nav>
 
               <button
                 type="button"
                 onClick={(e) => onToggleHomeTheme(e)}
                 aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
                 title={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
-                className={`flex min-h-[40px] min-w-[40px] items-center justify-center rounded-full border transition active:scale-95 ${
-                  isDark
-                    ? 'border-[#f4f1ea]/20 text-[#f4f1ea] hover:bg-[#f4f1ea]/10'
-                    : 'border-[#141311]/15 text-[#141311] hover:bg-[#141311]/5'
-                }`}
+                className={iconButtonClass}
               >
                 {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </button>
 
               <button
                 type="button"
-                onClick={() => scrollToSection('create', true)}
-                className={`ml-0.5 inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-4 text-xs font-semibold transition sm:text-sm ${
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  scrollToSection('create', true);
+                }}
+                className={`inline-flex min-h-[40px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-xs font-semibold transition sm:px-4 sm:text-sm ${
                   isDark
                     ? 'bg-[#f4f1ea] text-[#141311] hover:bg-[#e5e0d5]'
                     : 'bg-[#141311] text-[#f8f6f2] hover:bg-[#2a2824]'
@@ -295,8 +348,49 @@ export function HomePage({
               >
                 <span>Try Now</span>
               </button>
-            </nav>
+
+              <button
+                ref={menuButtonRef}
+                type="button"
+                onClick={() => setMobileMenuOpen((prev) => !prev)}
+                aria-expanded={mobileMenuOpen}
+                aria-controls="home-mobile-menu"
+                aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+                className={`${iconButtonClass} md:hidden`}
+              >
+                {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
+
+          {mobileMenuOpen && (
+            <nav
+              id="home-mobile-menu"
+              aria-label="Mobile navigation"
+              className={`border-t px-4 py-3 md:hidden ${borderRule}`}
+            >
+              <div className="mx-auto flex max-w-6xl flex-col gap-1">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <a
+                      key={item.label}
+                      href={item.href}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setMobileMenuOpen(false);
+                        item.onSelect();
+                      }}
+                      className={mobileNavLinkClass}
+                    >
+                      {Icon && <Icon className="h-4 w-4" />}
+                      <span>{item.label}</span>
+                    </a>
+                  );
+                })}
+              </div>
+            </nav>
+          )}
         </header>
 
         <main id="top">

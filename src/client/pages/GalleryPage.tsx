@@ -20,6 +20,7 @@ import { SUPPORT_EMAIL, buildSupportMailto } from '../../shared/contact';
 import { CustomSelect } from '../components/CustomSelect';
 import { GalleryLockScreen } from '../components/GalleryLockScreen';
 import { GallerySurface, type MediaFilter } from '../components/GallerySurface';
+import { PhotoLightboxModal } from '../components/PhotoLightboxModal';
 import { TurnstileWidget } from '../components/TurnstileWidget';
 import { REPORT_REASON_OPTIONS } from '../config/galleryOptions';
 import {
@@ -75,6 +76,7 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
   const [reportToken, setReportToken] = useState('');
   const [reportStatus, setReportStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const reportDialogRef = useRef<HTMLDialogElement>(null);
+  const [lightboxPhotoId, setLightboxPhotoId] = useState<string | null>(null);
 
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -126,6 +128,11 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
   }, [data, selectedFolderPath, mediaFilter, visitorLikes, searchQuery]);
 
   const layout = layoutOverride || data?.gallery.layout || 'masonry';
+
+  const lightboxPhotos = useMemo(
+    () => filteredItems.filter((item) => item.kind === 'image'),
+    [filteredItems]
+  );
 
   const handleToggleLike = async (fileId: string) => {
     if (!data?.gallery.allowLikes) return;
@@ -351,6 +358,10 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
         onCancelZip={() => zipAbortRef.current?.abort()}
         onToggleLike={handleToggleLike}
         onOpenItem={(item) => {
+          if (item.kind === 'image') {
+            setLightboxPhotoId(item.id);
+            return;
+          }
           const suffix =
             selectedFolderPath !== '__ALL__'
               ? `?folder=${encodeURIComponent(selectedFolderPath)}`
@@ -365,6 +376,19 @@ export function GalleryPage({ slug, config, onOpenDonate, onNavigate }: GalleryP
         onNavigateHome={() => onNavigate('/')}
         feedbackFormUrl={config.feedbackFormUrl}
         reportFormUrl={config.reportFormUrl}
+      />
+
+      <PhotoLightboxModal
+        slug={slug}
+        photos={lightboxPhotos}
+        activePhotoId={lightboxPhotoId}
+        allowLikes={data.gallery.allowLikes}
+        allowDownload={data.gallery.allowDownload}
+        likeCounts={likeCounts}
+        visitorLikes={visitorLikes}
+        onSelectPhoto={setLightboxPhotoId}
+        onToggleLike={(fileId) => void handleToggleLike(fileId)}
+        onClose={() => setLightboxPhotoId(null)}
       />
 
       {/* Report Abuse Dialog */}
